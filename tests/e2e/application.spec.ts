@@ -3,7 +3,13 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
+import {
+  _electron as electron,
+  expect,
+  test,
+  type ElectronApplication,
+  type Page,
+} from '@playwright/test'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -11,7 +17,7 @@ test('首次启动显示可用的服务器配置窗口', async () => {
   const userData = await mkdtemp(path.join(tmpdir(), 'cws-electron-e2e-'))
   const application = await launch(userData)
   try {
-    const page = await application.firstWindow()
+    const page = await localWindow(application, 'setup.html')
     await expect(page.getByRole('heading', { name: '连接服务器' })).toBeVisible()
     await expect(page.getByLabel('服务器地址')).toBeFocused()
     await expect(page.getByRole('button', { name: '最小化窗口' })).toBeVisible()
@@ -34,9 +40,8 @@ test('首次启动显示可用的服务器配置窗口', async () => {
     await expect(page.locator('.window-titlebar')).toHaveCSS('height', '32px')
     expect(await page.evaluate(() => window.innerHeight)).toBe(420)
 
-    const menuPagePromise = application.waitForEvent('window')
     await page.getByRole('button', { name: '打开应用菜单' }).click()
-    const menuPage = await menuPagePromise
+    const menuPage = await localWindow(application, 'menu.html')
     await expect(menuPage.getByRole('menuitem', { name: '关于 Celery Web Speak' })).toBeVisible()
     await expect(menuPage.getByRole('menuitem', { name: '切换服务器' })).toHaveCount(0)
     await expect(menuPage.locator('body')).toHaveCSS('background-color', 'rgb(17, 18, 20)')
@@ -71,12 +76,11 @@ test('当前 HTTP Origin 是安全上下文并自动取得麦克风', async () =
 
   const application = await launch(userData, { CWS_E2E_FAKE_MEDIA: '1' })
   try {
-    const page = await application.firstWindow()
+    const page = await localWindow(application, 'shell.html')
     await expect(page.getByRole('button', { name: '打开应用菜单' })).toBeVisible()
 
-    const menuPagePromise = application.waitForEvent('window')
     await page.getByRole('button', { name: '打开应用菜单' }).click()
-    const menuPage = await menuPagePromise
+    const menuPage = await localWindow(application, 'menu.html')
     await expect(menuPage.getByRole('menuitem', { name: '切换服务器' })).toBeVisible()
     await expect(menuPage.getByRole('menuitem', { name: '重新加载 Ctrl+R' })).toBeVisible()
     await expect(menuPage.locator('body')).toHaveCSS('background-color', 'rgb(17, 18, 20)')
@@ -124,6 +128,24 @@ async function launch(userData: string, extraEnv: Record<string, string> = {}): 
       ...extraEnv,
     },
   })
+}
+
+async function localWindow(application: ElectronApplication, documentName: string): Promise<Page> {
+  let matchedPage: Page | undefined
+  await expect.poll(() => {
+    matchedPage = application.windows().find((page) => isLocalDocument(page, documentName))
+    return matchedPage !== undefined
+  }, { message: `等待本地窗口 ${documentName}` }).toBe(true)
+  return matchedPage as Page
+}
+
+function isLocalDocument(page: Page, documentName: string): boolean {
+  try {
+    const url = new URL(page.url())
+    return url.protocol === 'file:' && path.basename(fileURLToPath(url)) === documentName
+  } catch {
+    return false
+  }
 }
 
 async function remoteText(application: ElectronApplication, url: string, selector: string): Promise<string | null> {
