@@ -5,9 +5,10 @@ import path from 'node:path'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const dist = path.join(root, 'dist')
+const typescriptCli = path.join(root, 'node_modules', 'typescript', 'bin', 'tsc')
 
 await rm(dist, { recursive: true, force: true })
-await run(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['tsc', '-p', 'tsconfig.json'])
+await run(process.execPath, [typescriptCli, '-p', 'tsconfig.json'])
 await mkdir(path.join(dist, 'renderer'), { recursive: true })
 await cp(path.join(root, 'src', 'renderer'), path.join(dist, 'renderer'), { recursive: true })
 
