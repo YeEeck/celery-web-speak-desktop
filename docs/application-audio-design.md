@@ -280,7 +280,7 @@ PCM 不经过 `contextBridge` 回调或高频 invoke/send：
 1. Main 创建 MessageChannel。
 2. 一个 port 转交给 utilityProcess。
 3. 另一个 port 通过 `webContents.postMessage` 发送给 remote preload。
-4. preload 只在 sessionId 匹配时把 DOM MessagePort 转交给当前页面。
+4. preload 按 sessionId 暂存收到的端口，并在对应快照到达后把 DOM MessagePort 转交给当前页面；不能假设 `start()` 的 invoke 返回和 `pcm-port` IPC 事件有固定到达顺序。
 5. Web AudioWorklet 消费 port 中带 sessionId 和序号的 `ArrayBuffer`。
 
 Electron 43 的 `MessagePortMain.postMessage` transfer list 只接受 `MessagePortMain`，不能转移
