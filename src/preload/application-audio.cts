@@ -16,6 +16,7 @@ const pcmPortEvent = 'celery:application-audio:pcm-port'
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const listeners = new Set<(snapshot: unknown) => void>()
 const deliveredPorts = new Set<string>()
+const pendingPcmPorts = new Map<string, MessagePort>()
 let currentSessionId: string | null = null
 let currentRevision = -1
 
@@ -23,16 +24,16 @@ ipcRenderer.on(channels.snapshot, (_event, snapshot: unknown) => applySnapshot(s
 ipcRenderer.on(channels.pcmPort, (event, input: unknown) => {
   const sessionId = readSessionId(input)
   const port = event.ports[0]
-  if (!sessionId || sessionId !== currentSessionId || deliveredPorts.has(sessionId) || !port) {
+  if (!sessionId || deliveredPorts.has(sessionId) || !port) {
     for (const ignored of event.ports) ignored.close()
     return
   }
-  deliveredPorts.add(sessionId)
-  window.postMessage(Object.freeze({
-    type: pcmPortEvent,
-    protocol: applicationAudioProtocol,
-    sessionId,
-  }), window.location.origin, [port])
+  if (sessionId === currentSessionId) {
+    deliverPcmPort(sessionId, port)
+    return
+  }
+  pendingPcmPorts.get(sessionId)?.close()
+  pendingPcmPorts.set(sessionId, port)
 })
 
 const bridge = Object.freeze({
@@ -86,8 +87,30 @@ function applySnapshot(input: unknown, notify: boolean): void {
       (typeof snapshot.sessionId !== 'string' || !sessionIdPattern.test(snapshot.sessionId))) return
   currentRevision = snapshot.revision as number
   currentSessionId = snapshot.sessionId as string | null
+  flushPendingPcmPorts()
   if (!notify) return
   for (const listener of listeners) listener(input)
+}
+
+function flushPendingPcmPorts(): void {
+  for (const [sessionId, port] of pendingPcmPorts) {
+    pendingPcmPorts.delete(sessionId)
+    if (sessionId === currentSessionId) deliverPcmPort(sessionId, port)
+    else port.close()
+  }
+}
+
+function deliverPcmPort(sessionId: string, port: MessagePort): void {
+  if (deliveredPorts.has(sessionId)) {
+    port.close()
+    return
+  }
+  deliveredPorts.add(sessionId)
+  window.postMessage(Object.freeze({
+    type: pcmPortEvent,
+    protocol: applicationAudioProtocol,
+    sessionId,
+  }), window.location.origin, [port])
 }
 
 function readSessionId(input: unknown): string | null {
