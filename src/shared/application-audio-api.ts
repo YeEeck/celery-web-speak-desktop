@@ -1,4 +1,5 @@
 export const APPLICATION_AUDIO_PROTOCOL = 1
+export const APPLICATION_AUDIO_PCM_PORT_EVENT = 'celery-web-speak:application-audio-pcm-port'
 
 export const APPLICATION_AUDIO_CAPABILITIES = [
   'application_audio_capture',
@@ -116,4 +117,3 @@ export function isValidApplicationAudioSessionId(input: unknown): input is strin
   return typeof input === 'string'
     && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input)
 }
-

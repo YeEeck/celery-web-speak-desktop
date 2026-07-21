@@ -1,0 +1,93 @@
+const { contextBridge, ipcRenderer } = require('electron') as typeof import('electron')
+
+const channels = {
+  hello: 'application-audio:hello',
+  getSnapshot: 'application-audio:get-snapshot',
+  start: 'application-audio:start',
+  pause: 'application-audio:pause',
+  resume: 'application-audio:resume',
+  stop: 'application-audio:stop',
+  snapshot: 'application-audio:snapshot',
+  pcmPort: 'application-audio:pcm-port',
+} as const
+
+const pcmPortEvent = 'celery-web-speak:application-audio-pcm-port'
+const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const listeners = new Set<(snapshot: unknown) => void>()
+const deliveredPorts = new Set<string>()
+let currentSessionId: string | null = null
+let currentRevision = -1
+
+ipcRenderer.on(channels.snapshot, (_event, snapshot: unknown) => applySnapshot(snapshot, true))
+ipcRenderer.on(channels.pcmPort, (event, input: unknown) => {
+  const sessionId = readSessionId(input)
+  const port = event.ports[0]
+  if (!sessionId || sessionId !== currentSessionId || deliveredPorts.has(sessionId) || !port) {
+    for (const ignored of event.ports) ignored.close()
+    return
+  }
+  deliveredPorts.add(sessionId)
+  window.postMessage(Object.freeze({ type: pcmPortEvent, sessionId }), window.location.origin, [port])
+})
+
+const bridge = Object.freeze({
+  hello: (input: unknown) => {
+    if (!input || typeof input !== 'object') return Promise.reject(new TypeError('Invalid protocol range'))
+    const candidate = input as { minProtocol?: unknown; maxProtocol?: unknown }
+    return ipcRenderer.invoke(channels.hello, {
+      minProtocol: candidate.minProtocol,
+      maxProtocol: candidate.maxProtocol,
+    })
+  },
+  getSnapshot: () => invokeSnapshot(channels.getSnapshot),
+  start: () => invokeSnapshot(channels.start),
+  pause: (sessionId: unknown) => invokeSessionCommand(channels.pause, sessionId),
+  resume: (sessionId: unknown) => invokeSessionCommand(channels.resume, sessionId),
+  stop: (sessionId: unknown) => invokeSessionCommand(channels.stop, sessionId),
+  onSnapshot: (listener: unknown) => {
+    if (typeof listener !== 'function') throw new TypeError('Snapshot listener must be a function')
+    const safeListener = listener as (snapshot: unknown) => void
+    listeners.add(safeListener)
+    return () => listeners.delete(safeListener)
+  },
+})
+
+contextBridge.exposeInMainWorld('desktopApplicationAudio', bridge)
+
+async function invokeSnapshot(channel: string): Promise<unknown> {
+  const snapshot = await ipcRenderer.invoke(channel)
+  applySnapshot(snapshot, false)
+  return snapshot
+}
+
+function invokeSessionCommand(channel: string, sessionId: unknown): Promise<unknown> {
+  if (typeof sessionId !== 'string' || !sessionIdPattern.test(sessionId)) {
+    return Promise.reject(new TypeError('Invalid application audio session ID'))
+  }
+  return invokeSnapshotWithInput(channel, sessionId)
+}
+
+async function invokeSnapshotWithInput(channel: string, input: unknown): Promise<unknown> {
+  const snapshot = await ipcRenderer.invoke(channel, input)
+  applySnapshot(snapshot, false)
+  return snapshot
+}
+
+function applySnapshot(input: unknown, notify: boolean): void {
+  if (!input || typeof input !== 'object') return
+  const snapshot = input as { sessionId?: unknown; revision?: unknown }
+  if (!Number.isSafeInteger(snapshot.revision) || (snapshot.revision as number) < currentRevision) return
+  if (snapshot.sessionId !== null &&
+      (typeof snapshot.sessionId !== 'string' || !sessionIdPattern.test(snapshot.sessionId))) return
+  currentRevision = snapshot.revision as number
+  currentSessionId = snapshot.sessionId as string | null
+  if (!notify) return
+  for (const listener of listeners) listener(input)
+}
+
+function readSessionId(input: unknown): string | null {
+  if (!input || typeof input !== 'object') return null
+  const sessionId = (input as { sessionId?: unknown }).sessionId
+  return typeof sessionId === 'string' && sessionIdPattern.test(sessionId) ? sessionId : null
+}
+

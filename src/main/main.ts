@@ -10,6 +10,7 @@ import { Logger } from './logger.js'
 import { disableApplicationMenu, registerApplicationMenuIpc, showApplicationMenu } from './menu.js'
 import { validateServer } from './server-validator.js'
 import { createRemoteWindow, createSetupWindow } from './windows.js'
+import { ApplicationAudioCoordinator } from './application-audio.js'
 import { SETUP_CHANNELS, type SetupSaveRequest, type SetupState } from '../shared/setup-api.js'
 import { WINDOW_CHANNELS, type WindowMenuPosition } from '../shared/window-api.js'
 
@@ -39,6 +40,7 @@ let setupStartupError = ''
 let quitting = false
 let store: ConfigStore
 let logger: Logger
+let applicationAudio: ApplicationAudioCoordinator | null = null
 
 app.on('certificate-error', (event, _webContents, _url, _error, _certificate, callback) => {
   event.preventDefault()
@@ -49,6 +51,7 @@ app.on('second-instance', () => focusCurrentWindow())
 
 app.on('before-quit', () => {
   quitting = true
+  applicationAudio?.shutdown()
 })
 
 app.on('window-all-closed', () => {
@@ -65,6 +68,7 @@ if (hasSingleInstanceLock) {
 async function initialize(): Promise<void> {
   store = new ConfigStore(app.getPath('userData'))
   logger = new Logger(app.getPath('userData'))
+  applicationAudio = new ApplicationAudioCoordinator(logger)
   logger.info('application_started', { version: app.getVersion() })
   registerSetupIpc()
   registerWindowIpc()
@@ -162,6 +166,7 @@ function showSetup(canCancel: boolean, startupError = ''): void {
   setupCanCancel = canCancel
   setupStartupError = startupError
   const previous = currentWindow
+  applicationAudio?.unbindRemote()
   currentRemoteContents = null
   currentWindow = createSetupWindow()
   attachWindowChrome(currentWindow)
@@ -182,6 +187,7 @@ function showRemote(config: NonNullable<Awaited<ReturnType<ConfigStore['load']>>
   })
   currentWindow = remote.window
   currentRemoteContents = remote.webContents
+  applicationAudio?.bindRemote(remote.window, remote.webContents, config.serverUrl)
   attachWindowChrome(currentWindow)
   previous?.destroy()
 }

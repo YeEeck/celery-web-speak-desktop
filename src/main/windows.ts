@@ -81,6 +81,7 @@ export function createRemoteWindow(
   const remoteView = new WebContentsView({
     webPreferences: {
       partition: REMOTE_PARTITION,
+      preload: path.join(currentDirectory, '..', 'preload', 'application-audio.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
