@@ -3,7 +3,7 @@ export type ServerValidationResult =
   | { ok: false; code: 'invalid_url' | 'timeout' | 'network_error' | 'unexpected_status' | 'invalid_response'; message: string }
 
 export interface FetchLike {
-  (input: string | URL, init?: RequestInit): Promise<Pick<Response, 'ok' | 'status' | 'json'>>
+  (input: string, init?: RequestInit): Promise<Pick<Response, 'ok' | 'status' | 'json'>>
 }
 
 export async function validateServer(
