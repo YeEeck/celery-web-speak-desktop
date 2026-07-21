@@ -44,6 +44,8 @@
 | 发布 | 独立 `v*` 标签与 GitHub Actions |
 | DevTools | 开发环境可用，正式包禁用入口和快捷键 |
 | 图标 | 首期使用字母 C 品牌图标 |
+| 窗口框架 | Windows 与 Linux 使用统一的深色自绘标题栏，不显示原生应用菜单栏 |
+| 关闭语义 | 关闭按钮立即退出应用并结束语音，不引入托盘驻留 |
 
 ## 总体结构
 
@@ -57,21 +59,38 @@
 | Health Validator      |
 +-----------+-----------+
             |
-            | local IPC, only in setup window
+            | narrowly scoped local IPC
             v
-+-----------------------+       +---------------------------+
-| Local Setup Window    |       | Remote Application Window |
-| server URL / retry    |       | server-hosted Vue         |
-+-----------------------+       | LiveKit Web               |
-                                +-------------+-------------+
-                                              |
-                                              v
-                                  Go API / WS / LiveKit
++-----------------------+       +------------------------------+
+| Local Setup Window    |       | Remote Application Window    |
+| title bar / URL form  |       | local title bar shell        |
++-----------------------+       | +--------------------------+ |
+                                | | remote WebContentsView   | |
+                                | | Vue / LiveKit Web        | |
+                                | +------------+-------------+ |
+                                +--------------|---------------+
+                                               v
+                                   Go API / WS / LiveKit
 ```
 
-本地配置窗口和远程应用窗口是两个不同的 `BrowserWindow`。配置窗口使用只包含少量配置 IPC 的 preload；远程应用窗口不加载 preload，也不获得 Node.js 或 Electron API。
+本地配置窗口和远程应用窗口是两个不同的无边框 `BrowserWindow`。配置窗口使用只包含配置与窗口控制 IPC 的 preload。远程应用窗口的本地壳层只负责标题栏和菜单，服务器页面承载在独立的 `WebContentsView` 中；远程页面本身不加载 preload，也不获得 Node.js 或 Electron API。
 
 切换服务器时销毁远程窗口、显示配置窗口、保存新 Origin，然后重启应用。重启保证启动早期的 Chromium HTTP 安全上下文参数与当前服务器一致。
+
+## 窗口框架与菜单
+
+Windows 与 Linux 使用一致的 32px 深色自绘标题栏。左侧显示应用图标和名称，中间区域可拖动窗口，右侧依次提供“更多”、最小化、最大化/还原和关闭按钮。双击可拖动区域切换最大化状态；最大化状态变化时同步更新还原按钮和无边框窗口布局。
+
+不安装 Electron 原生应用菜单栏。“更多”菜单使用 Electron `Menu.popup()` 保留原生菜单的键盘导航和屏幕边界处理，但只向用户提供以下命令：
+
+- 切换服务器。
+- 重新加载远程页面。
+- 关于 Celery Web Speak。
+- 退出。
+
+撤销、重做、剪切、复制、粘贴与全选不再占用可见菜单空间，远程页面继续使用 Chromium 的标准编辑快捷键。开发环境的 DevTools 能力不出现在用户菜单中，正式包继续阻止 DevTools。
+
+配置页与标题栏使用同一套接近 Discord 的深色界面，同时保留 Celery 绿色作为品牌识别色。服务器地址的部署路径、证书策略和 HTTP 麦克风实现不作为常驻说明展示；输入错误或连接失败时再提供面向操作的状态反馈。
 
 ## 目录规划
 
