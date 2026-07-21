@@ -58,6 +58,7 @@ export class ApplicationAudioCoordinator {
   private probeApplied = false
   private worker: ApplicationAudioWorkerProcess | null = null
   private operations: Promise<unknown> = Promise.resolve()
+  private lifecycleRevision = 0
 
   constructor(private readonly logger: Logger) {
     ipcMain.handle(APPLICATION_AUDIO_CHANNELS.hello, (event, input: unknown) => (
@@ -77,8 +78,9 @@ export class ApplicationAudioCoordinator {
     ))
     ipcMain.handle(APPLICATION_AUDIO_CHANNELS.stop, (event, sessionId: unknown) => {
       this.assertTrusted(event)
-      if (this.snapshot.state === 'selecting' && sessionId === this.snapshot.sessionId) {
-        this.picker.close()
+      if (['selecting', 'starting'].includes(this.snapshot.state) &&
+          sessionId === this.snapshot.sessionId) {
+        this.invalidateActiveCapture()
       }
       return this.enqueue(() => this.stop(event, sessionId))
     })
@@ -94,7 +96,7 @@ export class ApplicationAudioCoordinator {
     this.remote = binding
     webContents.on('did-start-navigation', (_event, _url, _isInPlace, isMainFrame) => {
       if (isMainFrame && this.remote === binding && this.snapshot.sessionId) {
-        this.picker.close()
+        this.invalidateActiveCapture()
         void this.enqueue(() => this.stopInternal(null))
       }
     })
@@ -109,15 +111,13 @@ export class ApplicationAudioCoordinator {
   unbindRemote(): void {
     if (!this.remote && !this.snapshot.sessionId && !this.worker) return
     this.remote = null
-    this.picker.close()
+    this.invalidateActiveCapture()
     void this.enqueue(() => this.stopInternal(null))
   }
 
   shutdown(): void {
     this.remote = null
-    this.picker.close()
-    this.worker?.terminate()
-    this.worker = null
+    this.invalidateActiveCapture()
   }
 
   private async hello(event: IpcMainInvokeEvent, input: unknown) {
@@ -146,9 +146,10 @@ export class ApplicationAudioCoordinator {
     if (this.snapshot.sessionId || this.snapshot.state !== 'idle') return this.copySnapshot()
 
     const sessionId = randomUUID()
+    const lifecycleRevision = this.lifecycleRevision
     this.transition({ sessionId, state: 'selecting', supported: true, error: null })
     const selection = await this.picker.open(binding.window)
-    if (!selection || this.remote !== binding) {
+    if (!selection || this.remote !== binding || lifecycleRevision !== this.lifecycleRevision) {
       this.transition({ sessionId: null, state: 'idle', supported: true, error: null })
       return this.copySnapshot()
     }
@@ -160,7 +161,8 @@ export class ApplicationAudioCoordinator {
         onEvent: (workerEvent) => this.handleWorkerEvent(workerEvent),
         onExit: () => this.handleWorkerExit(),
       })
-      if (this.remote !== binding || this.snapshot.sessionId !== sessionId) {
+      if (this.remote !== binding || this.snapshot.sessionId !== sessionId ||
+          lifecycleRevision !== this.lifecycleRevision) {
         worker.terminate()
         channel.port1.close()
         channel.port2.close()
@@ -168,7 +170,8 @@ export class ApplicationAudioCoordinator {
       }
       this.worker = worker
       await worker.start(sessionId, selection.hwndDecimal, channel.port1)
-      if (this.remote !== binding || this.snapshot.sessionId !== sessionId) {
+      if (this.remote !== binding || this.snapshot.sessionId !== sessionId ||
+          lifecycleRevision !== this.lifecycleRevision) {
         worker.terminate()
         channel.port2.close()
         return this.copySnapshot()
@@ -183,7 +186,9 @@ export class ApplicationAudioCoordinator {
     } catch {
       channel.port1.close()
       channel.port2.close()
-      await this.stopInternal(applicationAudioError('capture_start_failed'))
+      await this.stopInternal(lifecycleRevision === this.lifecycleRevision
+        ? applicationAudioError('capture_start_failed')
+        : null)
     }
     return this.copySnapshot()
   }
@@ -290,6 +295,13 @@ export class ApplicationAudioCoordinator {
     if (!this.worker || !this.snapshot.sessionId) return
     this.worker = null
     void this.enqueue(() => this.stopInternal(applicationAudioError('capture_worker_exited')))
+  }
+
+  private invalidateActiveCapture(): void {
+    ++this.lifecycleRevision
+    this.picker.close()
+    this.worker?.terminate()
+    this.worker = null
   }
 
   private async ensureProbe(): Promise<NativeProbeResult> {
