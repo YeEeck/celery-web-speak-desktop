@@ -32,6 +32,14 @@ test('首次启动显示可用的服务器配置窗口', async () => {
     expect(Math.abs(inputAlignment.inputCenter - inputAlignment.wrapperCenter)).toBeLessThanOrEqual(1)
 
     await expect(page.locator('.window-titlebar')).toHaveCSS('height', '32px')
+    expect(await page.evaluate(() => window.innerHeight)).toBe(420)
+
+    const menuPagePromise = application.waitForEvent('window')
+    await page.getByRole('button', { name: '打开应用菜单' }).click()
+    const menuPage = await menuPagePromise
+    await expect(menuPage.getByRole('menuitem', { name: '关于 Celery Web Speak' })).toBeVisible()
+    await expect(menuPage.getByRole('menuitem', { name: '切换服务器' })).toHaveCount(0)
+    await expect(menuPage.locator('body')).toHaveCSS('background-color', 'rgb(17, 18, 20)')
 
     await page.getByLabel('服务器地址').fill('https://voice.example.com/subpath')
     await page.getByRole('button', { name: '验证并进入' }).click()
@@ -65,6 +73,13 @@ test('当前 HTTP Origin 是安全上下文并自动取得麦克风', async () =
   try {
     const page = await application.firstWindow()
     await expect(page.getByRole('button', { name: '打开应用菜单' })).toBeVisible()
+
+    const menuPagePromise = application.waitForEvent('window')
+    await page.getByRole('button', { name: '打开应用菜单' }).click()
+    const menuPage = await menuPagePromise
+    await expect(menuPage.getByRole('menuitem', { name: '切换服务器' })).toBeVisible()
+    await expect(menuPage.getByRole('menuitem', { name: '重新加载 Ctrl+R' })).toBeVisible()
+    await expect(menuPage.locator('body')).toHaveCSS('background-color', 'rgb(17, 18, 20)')
 
     await expect.poll(() => remoteText(application, serverUrl, 'h1')).toBe('HTTP voice test')
     const remoteState = await application.evaluate(async ({ webContents }, targetUrl) => {
