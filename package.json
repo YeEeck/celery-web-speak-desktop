@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "test:e2e": "npm run build && playwright test",
     "test:e2e:linux": "npm run build && xvfb-run -a playwright test",
+    "verify:application-audio-worker:linux": "npm run build && env -u ELECTRON_RUN_AS_NODE xvfb-run -a electron --no-sandbox scripts/verify-application-audio-worker.mjs",
     "icons": "node scripts/build-icons.mjs",
     "start": "npm run build && electron .",
     "package:linux": "npm run build && electron-builder --linux AppImage --x64 --publish never",

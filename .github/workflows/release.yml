@@ -22,6 +22,11 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run package:win-dir
+      - name: 验证应用音频工作进程握手
+        shell: pwsh
+        run: |
+          $env:CWS_PACKAGED_RESOURCES = "$pwd\release\win-unpacked\resources"
+          npx electron scripts/verify-application-audio-worker.mjs
       - run: npm run package:win-zip
       - name: 验证应用音频原生模块
         shell: pwsh
@@ -72,6 +77,8 @@ jobs:
       - name: Electron 集成测试
         run: xvfb-run -a npm run test:e2e
       - run: npm run package:linux
+      - name: 验证打包后的应用音频工作进程握手
+        run: CWS_PACKAGED_RESOURCES="$PWD/release/linux-unpacked/resources" xvfb-run -a npx electron --no-sandbox scripts/verify-application-audio-worker.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: linux-x64
