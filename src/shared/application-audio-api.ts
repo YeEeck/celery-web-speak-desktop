@@ -1,5 +1,5 @@
 export const APPLICATION_AUDIO_PROTOCOL = 1
-export const APPLICATION_AUDIO_PCM_PORT_EVENT = 'celery-web-speak:application-audio-pcm-port'
+export const APPLICATION_AUDIO_PCM_PORT_EVENT = 'celery:application-audio:pcm-port'
 
 export const APPLICATION_AUDIO_CAPABILITIES = [
   'application_audio_capture',

@@ -11,7 +11,8 @@ const channels = {
   pcmPort: 'application-audio:pcm-port',
 } as const
 
-const pcmPortEvent = 'celery-web-speak:application-audio-pcm-port'
+const applicationAudioProtocol = 1
+const pcmPortEvent = 'celery:application-audio:pcm-port'
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const listeners = new Set<(snapshot: unknown) => void>()
 const deliveredPorts = new Set<string>()
@@ -27,7 +28,11 @@ ipcRenderer.on(channels.pcmPort, (event, input: unknown) => {
     return
   }
   deliveredPorts.add(sessionId)
-  window.postMessage(Object.freeze({ type: pcmPortEvent, sessionId }), window.location.origin, [port])
+  window.postMessage(Object.freeze({
+    type: pcmPortEvent,
+    protocol: applicationAudioProtocol,
+    sessionId,
+  }), window.location.origin, [port])
 })
 
 const bridge = Object.freeze({
@@ -90,4 +95,3 @@ function readSessionId(input: unknown): string | null {
   const sessionId = (input as { sessionId?: unknown }).sessionId
   return typeof sessionId === 'string' && sessionIdPattern.test(sessionId) ? sessionId : null
 }
-

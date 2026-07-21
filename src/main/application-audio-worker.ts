@@ -85,7 +85,12 @@ export class ApplicationAudioWorkerProcess {
       )
       return response.result
     } catch {
-      return { supported: false, reason: 'process_loopback_unavailable', windowsBuild: null }
+      return {
+        supported: false,
+        reason: 'process_loopback_unavailable',
+        windowsBuild: null,
+        failureStage: 'worker_process',
+      }
     } finally {
       worker?.shutdown()
     }

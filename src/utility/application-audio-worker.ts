@@ -96,9 +96,17 @@ function probe(): NativeProbeResult {
     return { supported: false, reason: 'unsupported_platform', windowsBuild: null }
   }
   try {
-    return loadNativeModule().probe()
+    const result = loadNativeModule().probe()
+    return result.supported || result.reason !== 'process_loopback_unavailable'
+      ? result
+      : { ...result, failureStage: 'native_probe' }
   } catch {
-    return { supported: false, reason: 'process_loopback_unavailable', windowsBuild: null }
+    return {
+      supported: false,
+      reason: 'process_loopback_unavailable',
+      windowsBuild: null,
+      failureStage: 'native_module_load',
+    }
   }
 }
 
@@ -206,4 +214,3 @@ process.on('SIGTERM', () => {
   cleanupCapture()
   process.exit(0)
 })
-

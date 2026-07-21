@@ -7,6 +7,7 @@ export interface NativeProbeResult {
   supported: boolean
   reason: NativeProbeReason | null
   windowsBuild: number | null
+  failureStage?: 'worker_process' | 'native_module_load' | 'native_probe'
 }
 
 export type ApplicationAudioWorkerCommand =
@@ -34,4 +35,3 @@ export type ApplicationAudioWorkerEvent =
     deliveredBlocks: number
     bufferedFrames: number
   }
-

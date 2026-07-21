@@ -309,6 +309,12 @@ export class ApplicationAudioCoordinator {
     const result = await this.probePromise
     if (!this.probeApplied && !this.snapshot.sessionId) {
       this.probeApplied = true
+      this.logger.info('application_audio_probe', {
+        supported: result.supported,
+        reason: result.reason,
+        windowsBuild: result.windowsBuild,
+        failureStage: result.failureStage ?? null,
+      })
       this.snapshot = {
         ...this.snapshot,
         revision: this.snapshot.revision + 1,

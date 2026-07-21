@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { isValidApplicationAudioSessionId, normalizeProtocolRange } from './application-audio-api.js'
+import {
+  APPLICATION_AUDIO_PCM_PORT_EVENT,
+  isValidApplicationAudioSessionId,
+  normalizeProtocolRange,
+} from './application-audio-api.js'
 
 describe('application audio API validation', () => {
+  it('uses the cross-repository PCM port event name', () => {
+    expect(APPLICATION_AUDIO_PCM_PORT_EVENT).toBe('celery:application-audio:pcm-port')
+  })
+
   it('normalizes a valid protocol range', () => {
     expect(normalizeProtocolRange({ minProtocol: 1, maxProtocol: 2 })).toEqual({
       minProtocol: 1,
