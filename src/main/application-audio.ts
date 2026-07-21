@@ -314,6 +314,8 @@ export class ApplicationAudioCoordinator {
         reason: result.reason,
         windowsBuild: result.windowsBuild,
         failureStage: result.failureStage ?? null,
+        workerFailure: result.workerFailure ?? null,
+        workerExitCode: result.workerExitCode ?? null,
       })
       this.snapshot = {
         ...this.snapshot,

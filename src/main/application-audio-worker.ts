@@ -22,6 +22,17 @@ interface Waiter {
   timer: NodeJS.Timeout
 }
 
+type WorkerFailure = NonNullable<NativeProbeResult['workerFailure']>
+
+class ApplicationAudioWorkerError extends Error {
+  constructor(
+    readonly failure: WorkerFailure,
+    readonly exitCode: number | null = null,
+  ) {
+    super(`Application audio worker failed: ${failure}`)
+  }
+}
+
 export interface ApplicationAudioWorkerCallbacks {
   onEvent(event: ApplicationAudioWorkerEvent): void
   onExit(): void
@@ -54,19 +65,19 @@ export class ApplicationAudioWorkerProcess {
       }
       callbacks.onEvent(input)
     })
-    this.child.on('exit', () => {
+    this.child.on('exit', (code) => {
       this.exited = true
-      this.rejectWaiters(new Error('Application audio worker exited'))
+      this.rejectWaiters(new ApplicationAudioWorkerError('exit_before_response', code))
       if (!this.intentionalExit) callbacks.onExit()
     })
     this.child.on('error', () => {
-      this.rejectWaiters(new Error('Application audio worker failed'))
+      this.rejectWaiters(new ApplicationAudioWorkerError('spawn_error'))
     })
   }
 
   static async create(callbacks: ApplicationAudioWorkerCallbacks): Promise<ApplicationAudioWorkerProcess> {
     const worker = new ApplicationAudioWorkerProcess(callbacks)
-    await worker.waitFor((event) => event.type === 'ready')
+    await worker.waitFor((event) => event.type === 'ready', DEFAULT_TIMEOUT_MS, 'ready_timeout')
     return worker
   }
 
@@ -84,12 +95,15 @@ export class ApplicationAudioWorkerProcess {
         ),
       )
       return response.result
-    } catch {
+    } catch (error) {
+      const workerError = error instanceof ApplicationAudioWorkerError ? error : null
       return {
         supported: false,
         reason: 'process_loopback_unavailable',
         windowsBuild: null,
         failureStage: 'worker_process',
+        workerFailure: workerError?.failure ?? 'exit_before_response',
+        workerExitCode: workerError?.exitCode ?? null,
       }
     } finally {
       worker?.shutdown()
@@ -162,6 +176,7 @@ export class ApplicationAudioWorkerProcess {
   private waitFor(
     matches: (event: ApplicationAudioWorkerEvent) => boolean,
     timeoutMs = DEFAULT_TIMEOUT_MS,
+    timeoutFailure: WorkerFailure = 'response_timeout',
   ): Promise<ApplicationAudioWorkerEvent> {
     return new Promise((resolve, reject) => {
       const waiter: Waiter = {
@@ -171,7 +186,7 @@ export class ApplicationAudioWorkerProcess {
         timer: setTimeout(() => {
           this.waiters.delete(waiter)
           this.terminate()
-          reject(new Error('Application audio worker timed out'))
+          reject(new ApplicationAudioWorkerError(timeoutFailure))
         }, timeoutMs),
       }
       this.waiters.add(waiter)

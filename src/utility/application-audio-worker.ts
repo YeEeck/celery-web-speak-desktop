@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module'
-import { parentPort, type MessagePortMain } from 'electron'
+import type { MessagePortMain } from 'electron'
 import type {
   ApplicationAudioWorkerCommand,
   ApplicationAudioWorkerEvent,
@@ -33,6 +33,7 @@ interface NativeModule {
 }
 
 const require = createRequire(import.meta.url)
+const parentPort = process.parentPort
 let nativeModule: NativeModule | null = null
 let capture: NativeCapture | null = null
 let sessionId: string | null = null

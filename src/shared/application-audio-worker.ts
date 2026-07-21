@@ -8,6 +8,8 @@ export interface NativeProbeResult {
   reason: NativeProbeReason | null
   windowsBuild: number | null
   failureStage?: 'worker_process' | 'native_module_load' | 'native_probe'
+  workerFailure?: 'spawn_error' | 'exit_before_response' | 'ready_timeout' | 'response_timeout'
+  workerExitCode?: number | null
 }
 
 export type ApplicationAudioWorkerCommand =
