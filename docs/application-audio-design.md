@@ -290,6 +290,18 @@ Electron 43 的 `MessagePortMain.postMessage` transfer list 只接受 `MessagePo
 验证消息频率、欠载和爆音；如果该复制成为瓶颈，后续必须通过独立共享内存协议解决，不能假定
 Electron 支持未公开的 ArrayBuffer transfer 行为。
 
+remote preload 使用当前页面 Origin 调用 `window.postMessage`，固定消息为：
+
+```ts
+{
+  type: 'celery-web-speak:application-audio-pcm-port'
+  sessionId: string
+}
+```
+
+页面从对应 `MessageEvent.ports[0]` 取得唯一 PCM port，并同时校验 `event.source === window`、
+`event.origin === window.location.origin` 与当前 `sessionId`。同一 session 的重复 port 必须关闭。
+
 每个 PCM block 至少包含：
 
 ```ts
