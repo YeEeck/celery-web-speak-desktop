@@ -23,6 +23,14 @@ test('首次启动显示可用的服务器配置窗口', async () => {
     await expect(page.getByRole('button', { name: '最小化窗口' })).toBeVisible()
     await expect(page.getByRole('button', { name: '最大化窗口' })).toBeVisible()
     await expect(page.getByRole('button', { name: '关闭窗口' })).toBeVisible()
+    const controlIconSizes = await page.locator('.window-titlebar-controls .window-control-icon').evaluateAll((icons) => (
+      icons.map((icon) => ({ width: icon.clientWidth, height: icon.clientHeight }))
+    ))
+    expect(controlIconSizes).toEqual([
+      { width: 10, height: 10 },
+      { width: 10, height: 10 },
+      { width: 10, height: 10 },
+    ])
     expect(await application.evaluate(({ Menu }) => Menu.getApplicationMenu())).toBeNull()
     await expect(page.getByText('使用完整的 HTTP 或 HTTPS 地址')).toHaveCount(0)
     await expect(page.getByText('桌面客户端将忽略服务器证书错误')).toHaveCount(0)

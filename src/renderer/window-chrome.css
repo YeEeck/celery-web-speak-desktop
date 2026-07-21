@@ -66,9 +66,6 @@
   border: 0;
   border-radius: 0;
   cursor: default;
-  font-family: "Segoe UI Symbol", "Noto Sans Symbols", sans-serif;
-  font-size: 16px;
-  line-height: 1;
 }
 
 .window-titlebar-button.menu {
@@ -84,6 +81,69 @@
   border-radius: 50%;
   box-shadow: -5px 0 currentColor, 5px 0 currentColor;
   font-size: 0;
+}
+
+.window-control-icon {
+  position: relative;
+  display: block;
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+}
+
+.window-control-icon::before,
+.window-control-icon::after {
+  position: absolute;
+  box-sizing: border-box;
+  content: "";
+}
+
+.window-control-icon.minimize::before {
+  top: 5px;
+  left: 0;
+  width: 10px;
+  height: 1px;
+  background: currentColor;
+}
+
+.window-control-icon.maximize::before {
+  inset: 0;
+  border: 1px solid currentColor;
+}
+
+.window-control-icon.maximize.restore::before {
+  top: 0;
+  right: 0;
+  bottom: auto;
+  left: auto;
+  width: 8px;
+  height: 8px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 75% 100%, 75% 25%, 0 25%);
+}
+
+.window-control-icon.maximize.restore::after {
+  bottom: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border: 1px solid currentColor;
+}
+
+.window-control-icon.close::before,
+.window-control-icon.close::after {
+  top: 5px;
+  left: -1px;
+  width: 12px;
+  height: 1px;
+  background: currentColor;
+}
+
+.window-control-icon.close::before {
+  transform: rotate(45deg);
+}
+
+.window-control-icon.close::after {
+  transform: rotate(-45deg);
 }
 
 .window-titlebar-button:hover {

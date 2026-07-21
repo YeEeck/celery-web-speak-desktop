@@ -37,5 +37,5 @@ function updateMaximized(maximized) {
   if (!maximizeButton || !maximizeIcon) return
   maximizeButton.setAttribute('aria-label', maximized ? '还原窗口' : '最大化窗口')
   maximizeButton.title = maximized ? '还原' : '最大化'
-  maximizeIcon.textContent = maximized ? '❐' : '□'
+  maximizeIcon.classList.toggle('restore', maximized)
 }
