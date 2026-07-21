@@ -23,6 +23,26 @@ jobs:
       - run: npm test
       - run: npm run package:win-dir
       - run: npm run package:win-zip
+      - name: 验证应用音频原生模块
+        shell: pwsh
+        run: |
+          $nativePath = "release/win-unpacked/resources/app.asar.unpacked/dist/native/win32-x64/application_audio.node"
+          if (-not (Test-Path $nativePath)) {
+            throw "Windows unpacked 产物缺少 $nativePath"
+          }
+          $zipPath = (Get-ChildItem "release/CeleryWebSpeak-*-windows-x64.zip" | Select-Object -First 1).FullName
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+          try {
+            $nativeEntry = $zip.Entries | Where-Object {
+              $_.FullName -eq "resources/app.asar.unpacked/dist/native/win32-x64/application_audio.node"
+            }
+            if (-not $nativeEntry) {
+              throw "Windows ZIP 产物缺少应用音频原生模块"
+            }
+          } finally {
+            $zip.Dispose()
+          }
       - name: 安装 Inno Setup
         run: choco install innosetup --no-progress -y
       - name: 构建 Inno 安装器
