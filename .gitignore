@@ -3,6 +3,7 @@ dist/
 release/
 coverage/
 test-results/
+native/application-audio/build/
 *.log
 *.tmp
 .idea/

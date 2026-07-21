@@ -10,6 +10,7 @@
   "private": true,
   "scripts": {
     "build": "node scripts/build.mjs",
+    "build:native": "node scripts/build-native.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -26,6 +27,7 @@
     "@types/node": "24.10.1",
     "electron": "43.1.1",
     "electron-builder": "26.15.3",
+    "node-gyp": "13.0.1",
     "png-to-ico": "3.0.2",
     "sharp": "0.35.3",
     "typescript": "7.0.2",
@@ -35,6 +37,9 @@
     "appId": "io.github.yeeeck.celery-web-speak",
     "productName": "Celery Web Speak",
     "asar": true,
+    "asarUnpack": [
+      "dist/native/**/*.node"
+    ],
     "directories": {
       "output": "release",
       "buildResources": "build/icons"

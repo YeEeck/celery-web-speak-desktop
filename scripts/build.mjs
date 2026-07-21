@@ -11,6 +11,9 @@ await rm(dist, { recursive: true, force: true })
 await run(process.execPath, [typescriptCli, '-p', 'tsconfig.json'])
 await mkdir(path.join(dist, 'renderer'), { recursive: true })
 await cp(path.join(root, 'src', 'renderer'), path.join(dist, 'renderer'), { recursive: true })
+if (process.platform === 'win32') {
+  await run(process.execPath, [path.join(root, 'scripts', 'build-native.mjs')])
+}
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
