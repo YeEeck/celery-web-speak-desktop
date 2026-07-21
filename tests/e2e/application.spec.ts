@@ -88,6 +88,9 @@ test('当前 HTTP Origin 是安全上下文并自动取得麦克风', async () =
   try {
     const page = await localWindow(application, 'shell.html')
     await expect(page.getByRole('button', { name: '打开应用菜单' })).toBeVisible()
+    expect(await page.evaluate(() => typeof (window as unknown as {
+      desktopApplicationAudio?: unknown
+    }).desktopApplicationAudio)).toBe('undefined')
 
     await page.getByRole('button', { name: '打开应用菜单' }).click()
     const menuPage = await localWindow(application, 'menu.html')
@@ -102,6 +105,15 @@ test('当前 HTTP Origin 是安全上下文并自动取得麦克风', async () =
       const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))
       if (!remote) throw new Error('remote WebContentsView was not found')
       const windowBridge = await remote.executeJavaScript('typeof window.desktopWindow')
+      const applicationAudio = await remote.executeJavaScript(`(async () => {
+        const hello = await window.desktopApplicationAudio.hello({ minProtocol: 1, maxProtocol: 1 })
+        const snapshot = await window.desktopApplicationAudio.getSnapshot()
+        return { hello, snapshot }
+      })()`)
+      const childBridge = await remote.executeJavaScript(`(() => {
+        const frame = document.querySelector('iframe')
+        return frame?.contentWindow ? typeof frame.contentWindow.desktopApplicationAudio : null
+      })()`)
       const microphone = await remote.executeJavaScript(`(() => {
         const output = document.querySelector('[data-testid="result"]')
         document.querySelector('#open').click()
@@ -119,9 +131,20 @@ test('当前 HTTP Origin 是安全上下文并自动取得麦克风', async () =
           }, 8000)
         })
       })()`)
-      return { windowBridge, microphone }
+      return { windowBridge, applicationAudio, childBridge, microphone }
     }, serverUrl)
     expect(remoteState.windowBridge).toBe('undefined')
+    expect(remoteState.applicationAudio.hello.protocol).toBe(1)
+    if (process.platform === 'linux') {
+      expect(remoteState.applicationAudio.hello.capabilities).toEqual([])
+      expect(remoteState.applicationAudio.snapshot).toMatchObject({
+        sessionId: null,
+        state: 'idle',
+        supported: false,
+        error: { code: 'unsupported_platform' },
+      })
+    }
+    expect(remoteState.childBridge).toBe('undefined')
     expect(remoteState.microphone).toBe('secure:true;audio:true')
   } finally {
     await application.close()
@@ -169,17 +192,22 @@ async function remoteText(application: ElectronApplication, url: string, selecto
 }
 
 async function startMediaServer(): Promise<Server> {
-  const server = createServer((_request, response) => {
+  const server = createServer((request, response) => {
     response.writeHead(200, {
       'Content-Type': 'text/html; charset=utf-8',
       'Permissions-Policy': 'microphone=(self)',
     })
+    if (request.url === '/frame') {
+      response.end('<!doctype html><html><body><p>child frame</p></body></html>')
+      return
+    }
     response.end(`<!doctype html>
       <html lang="en">
         <body>
           <h1>HTTP voice test</h1>
           <button id="open">Open microphone</button>
           <output data-testid="result"></output>
+          <iframe src="/frame" title="child frame"></iframe>
           <script>
             document.querySelector('#open').addEventListener('click', async () => {
               try {
