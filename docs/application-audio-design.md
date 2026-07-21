@@ -1,10 +1,10 @@
 # Celery Web Speak Desktop Windows 应用音频设计
 
-> 状态：v0.2.1 已实现，待 Windows 实机矩阵验收。
+> 状态：v0.2.2 已实现，待 Windows 实机矩阵验收。
 >
 > 设计日期：2026-07-21。
 >
-> 当前桌面实现基线：v0.2.1。
+> 当前桌面实现基线：v0.2.2。
 
 ## 文档边界
 
@@ -97,7 +97,7 @@ Main 是应用音频会话的唯一所有者。远程页面、选择器窗口和
 
 ### Remote WebContentsView
 
-v0.2.1 的远程 `WebContentsView` 只加载应用音频专用 preload，同时保持：
+v0.2.2 的远程 `WebContentsView` 只加载应用音频专用 preload，同时保持：
 
 ```text
 nodeIntegration: false
