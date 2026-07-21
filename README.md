@@ -4,7 +4,7 @@ Celery Web Speak 的 Windows 与 Linux Electron 客户端壳。
 
 客户端不打包服务器 Web UI，而是加载用户配置的 Celery Web Speak 服务器。登录 Cookie、LocalStorage 和其他站点数据保存在 Electron 独立用户目录中，不与系统浏览器共享。
 
-当前版本为 `0.1.5`，已实现服务器配置、远程 Web 加载、HTTP 麦克风安全上下文、自动权限、自绘窗口框架、深色应用菜单、Inno/ZIP/AppImage 打包和发布工作流。
+当前版本为 `0.1.6`，已实现服务器配置、远程 Web 加载、HTTP 麦克风安全上下文、自动权限、自绘窗口框架、深色应用菜单、统一尺寸的窗口控制图标、Inno/ZIP/AppImage 打包和发布工作流。
 
 详细设计见 [docs/architecture.md](docs/architecture.md)。
 
