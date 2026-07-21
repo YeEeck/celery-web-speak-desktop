@@ -266,6 +266,7 @@ Electron 未配置权限处理器时会自动批准权限请求。为避免跨 O
 - 桌面快捷方式由用户选择。
 - 卸载默认保留 Electron `userData`。
 - 卸载页提供可选“删除用户数据”任务。
+- 简体中文消息文件固定保存在 `build/languages/`，构建时不依赖 Inno Setup 安装目录中的非官方翻译。
 - 安装器和便携包均为 x64 且不签名。
 
 ### GitHub Actions
