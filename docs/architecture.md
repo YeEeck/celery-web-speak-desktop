@@ -1,6 +1,6 @@
 # Celery Web Speak Desktop 架构设计
 
-> 状态：方案已确认，尚未实施。
+> 状态：v0.1.0 实现基线。
 >
 > 设计日期：2026-07-21。
 
@@ -332,3 +332,15 @@ Electron 未配置权限处理器时会自动批准权限请求。为避免跨 O
 - TLS 错误被全局忽略，且文档和 UI 均明确提示。
 - 正式远程窗口没有 Node.js、preload 或 DevTools 入口。
 - 工作区无未提交改动。
+
+## 当前验证结果
+
+截至 2026-07-21：
+
+- TypeScript 严格类型检查通过。
+- 21 个配置、健康检查、Origin 和窗口状态单元测试通过。
+- 2 个真实 Electron 集成测试通过。
+- HTTP 测试页面在精确 Origin 开关下报告 `window.isSecureContext === true`。
+- HTTP 测试页面在无壳级提示下成功取得假麦克风音轨。
+- Linux x64 AppImage 已在本机生成并启动到窗口事件循环。
+- Windows ZIP 和 Inno 脚本已进入 CI，仍需第一次 Windows workflow 运行确认最终安装产物。
