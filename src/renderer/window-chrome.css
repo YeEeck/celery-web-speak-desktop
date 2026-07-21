@@ -1,0 +1,100 @@
+.window-titlebar {
+  display: flex;
+  width: 100%;
+  height: 32px;
+  align-items: center;
+  color: #b5bac1;
+  background: #1e1f22;
+  font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+  letter-spacing: 0;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+.window-titlebar-brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding-left: 10px;
+  overflow: hidden;
+}
+
+.window-titlebar-mark {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #102117;
+  background: #58c47f;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.window-titlebar-name {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.window-titlebar-spacer {
+  min-width: 24px;
+  flex: 1 1 auto;
+  align-self: stretch;
+}
+
+.window-titlebar-actions,
+.window-titlebar-controls {
+  display: flex;
+  height: 32px;
+  flex: 0 0 auto;
+  -webkit-app-region: no-drag;
+}
+
+.window-titlebar-button {
+  display: grid;
+  width: 46px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  color: #b5bac1;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: default;
+  font-family: "Segoe UI Symbol", "Noto Sans Symbols", sans-serif;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.window-titlebar-button.menu {
+  width: 40px;
+  font-size: 18px;
+}
+
+.window-titlebar-button:hover {
+  color: #f2f3f5;
+  background: #35373c;
+}
+
+.window-titlebar-button.close:hover {
+  color: #ffffff;
+  background: #da373c;
+}
+
+.window-titlebar-button:focus-visible {
+  outline: 2px solid #58c47f;
+  outline-offset: -2px;
+}
+
+.window-titlebar-button:active {
+  background: #404249;
+}
+
+.window-titlebar-button.close:active {
+  background: #a1282c;
+}

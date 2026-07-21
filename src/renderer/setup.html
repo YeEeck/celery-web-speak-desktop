@@ -5,9 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:" />
     <title>Celery Web Speak</title>
+    <link rel="stylesheet" href="./window-chrome.css" />
     <link rel="stylesheet" href="./setup.css" />
   </head>
   <body>
+    <header class="window-titlebar" aria-label="应用标题栏">
+      <div class="window-titlebar-brand">
+        <span class="window-titlebar-mark" aria-hidden="true">C</span>
+        <span class="window-titlebar-name">Celery Web Speak</span>
+      </div>
+      <div class="window-titlebar-spacer"></div>
+      <div class="window-titlebar-actions">
+        <button class="window-titlebar-button menu" data-window-action="menu" type="button" aria-label="打开应用菜单" title="菜单"><span aria-hidden="true">…</span></button>
+      </div>
+      <div class="window-titlebar-controls">
+        <button class="window-titlebar-button" data-window-action="minimize" type="button" aria-label="最小化窗口" title="最小化"><span aria-hidden="true">−</span></button>
+        <button class="window-titlebar-button" data-window-action="maximize" type="button" aria-label="最大化窗口" title="最大化"><span aria-hidden="true">□</span></button>
+        <button class="window-titlebar-button close" data-window-action="close" type="button" aria-label="关闭窗口" title="关闭"><span aria-hidden="true">×</span></button>
+      </div>
+    </header>
     <main class="setup-shell">
       <header class="brand-row">
         <span class="brand-mark" aria-hidden="true">C</span>
@@ -37,13 +53,6 @@
               required
             />
           </div>
-          <p class="field-hint">使用完整的 HTTP 或 HTTPS 地址，服务器需部署在根路径。</p>
-
-          <div class="security-notice">
-            <span class="notice-mark" aria-hidden="true">!</span>
-            <p>桌面客户端将忽略服务器证书错误。HTTP 地址会在重启后获得麦克风能力。</p>
-          </div>
-
           <div id="status" class="status" role="status" aria-live="polite" hidden></div>
 
           <div class="actions">
@@ -54,6 +63,7 @@
         </form>
       </section>
     </main>
+    <script src="./window-chrome.js"></script>
     <script src="./setup.js"></script>
   </body>
 </html>

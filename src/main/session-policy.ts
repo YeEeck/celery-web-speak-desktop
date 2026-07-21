@@ -1,4 +1,4 @@
-import { shell, type BrowserWindow, type Session, type WebContents } from 'electron'
+import { shell, type Session, type WebContents } from 'electron'
 import { canGrantPermission, isTrustedOrigin } from './origin-policy.js'
 
 export function configureSessionPolicy(targetSession: Session, serverUrl: string): void {
@@ -19,9 +19,7 @@ export function configureSessionPolicy(targetSession: Session, serverUrl: string
   })
 }
 
-export function configureNavigationPolicy(window: BrowserWindow, serverUrl: string, packaged: boolean): void {
-  const webContents = window.webContents
-
+export function configureNavigationPolicy(webContents: WebContents, serverUrl: string, packaged: boolean): void {
   webContents.setWindowOpenHandler(({ url }) => {
     if (!isTrustedOrigin(url, serverUrl)) {
       openExternalHttpUrl(url)
@@ -37,6 +35,13 @@ export function configureNavigationPolicy(window: BrowserWindow, serverUrl: stri
     if (isTrustedOrigin(url, serverUrl)) return
     event.preventDefault()
     openExternalHttpUrl(url)
+  })
+
+  webContents.on('before-input-event', (event, input) => {
+    if ((input.control || input.meta) && !input.shift && input.key.toLowerCase() === 'r') {
+      event.preventDefault()
+      webContents.reload()
+    }
   })
 
   if (packaged) disableDevTools(webContents)

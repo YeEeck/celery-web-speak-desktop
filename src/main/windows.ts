@@ -4,7 +4,9 @@ import {
   BrowserWindow,
   screen,
   session,
+  WebContentsView,
   type Rectangle,
+  type WebContents,
 } from 'electron'
 import type { AppConfig, ConfigStore, WindowState } from './config.js'
 import { configureNavigationPolicy, configureSessionPolicy } from './session-policy.js'
@@ -12,10 +14,16 @@ import { visibleWindowBounds } from './window-state.js'
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 const REMOTE_PARTITION = 'persist:celery-web-speak'
+const TITLE_BAR_HEIGHT = 32
 
 export interface WindowCallbacks {
   onRemoteClosed(): void
   onRemoteLoadFailed(message: string): void
+}
+
+export interface RemoteWindow {
+  window: BrowserWindow
+  webContents: WebContents
 }
 
 export function createSetupWindow(): BrowserWindow {
@@ -26,8 +34,8 @@ export function createSetupWindow(): BrowserWindow {
     minWidth: 520,
     minHeight: 500,
     show: false,
-    autoHideMenuBar: true,
-    backgroundColor: '#f4f6f8',
+    frame: false,
+    backgroundColor: '#313338',
     webPreferences: {
       preload: path.join(currentDirectory, '..', 'preload', 'setup.cjs'),
       nodeIntegration: false,
@@ -46,7 +54,7 @@ export function createRemoteWindow(
   store: ConfigStore,
   packaged: boolean,
   callbacks: WindowCallbacks,
-): BrowserWindow {
+): RemoteWindow {
   const displays: Rectangle[] = screen.getAllDisplays().map((display) => display.bounds)
   const bounds = visibleWindowBounds(config.window, displays)
   const remoteSession = session.fromPartition(REMOTE_PARTITION)
@@ -59,7 +67,18 @@ export function createRemoteWindow(
     minWidth: 960,
     minHeight: 640,
     show: false,
+    frame: false,
     backgroundColor: '#17191f',
+    webPreferences: {
+      preload: path.join(currentDirectory, '..', 'preload', 'shell.cjs'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+    },
+  })
+
+  const remoteView = new WebContentsView({
     webPreferences: {
       partition: REMOTE_PARTITION,
       nodeIntegration: false,
@@ -68,8 +87,24 @@ export function createRemoteWindow(
       webSecurity: true,
     },
   })
+  remoteView.setBackgroundColor('#17191f')
+  window.contentView.addChildView(remoteView)
 
-  configureNavigationPolicy(window, config.serverUrl, packaged)
+  const layoutRemoteView = () => {
+    const size = window.getContentSize()
+    const width = size[0] ?? 0
+    const height = size[1] ?? 0
+    remoteView.setBounds({
+      x: 0,
+      y: TITLE_BAR_HEIGHT,
+      width,
+      height: Math.max(0, height - TITLE_BAR_HEIGHT),
+    })
+  }
+  layoutRemoteView()
+  window.on('resize', layoutRemoteView)
+
+  configureNavigationPolicy(remoteView.webContents, config.serverUrl, packaged)
   if (config.window.maximized) window.maximize()
   window.once('ready-to-show', () => window.show())
 
@@ -84,13 +119,18 @@ export function createRemoteWindow(
     })
   })
 
-  window.webContents.on('did-fail-load', (_event, errorCode, errorDescription, _url, isMainFrame) => {
+  remoteView.webContents.on('did-fail-load', (_event, errorCode, errorDescription, _url, isMainFrame) => {
     if (!isMainFrame || errorCode === -3 || closing) return
     callbacks.onRemoteLoadFailed(`无法加载服务器：${errorDescription}`)
   })
 
-  void window.loadURL(config.serverUrl)
-  return window
+  window.on('closed', () => {
+    if (!remoteView.webContents.isDestroyed()) remoteView.webContents.close()
+  })
+
+  void window.loadFile(path.join(currentDirectory, '..', 'renderer', 'shell.html'))
+  void remoteView.webContents.loadURL(config.serverUrl)
+  return { window, webContents: remoteView.webContents }
 }
 
 async function persistWindowState(window: BrowserWindow, store: ConfigStore): Promise<void> {
@@ -104,5 +144,5 @@ async function persistWindowState(window: BrowserWindow, store: ConfigStore): Pr
     maximized: window.isMaximized(),
   }
   await store.updateWindow(state)
-  await window.webContents.session.flushStorageData()
+  await session.fromPartition(REMOTE_PARTITION).flushStorageData()
 }
