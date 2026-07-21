@@ -1,6 +1,6 @@
 # Celery Web Speak Desktop Windows 应用音频设计
 
-> 状态：方案已确认，尚未实施。
+> 状态：方案已确认，正在实施。
 >
 > 设计日期：2026-07-21。
 >
@@ -52,7 +52,7 @@ Chromium 不能可靠地只捕获选定 Windows 应用窗口的音频。Electron
 | 原生接口 | WASAPI Process Loopback |
 | 原生封装 | Node-API/N-API Windows x64 `.node` 模块 |
 | 进程承载 | Electron `utilityProcess` |
-| PCM 传输 | 可转移 `MessagePort` 与 `ArrayBuffer` |
+| PCM 传输 | 可转移 `MessagePort` + 结构化克隆 `ArrayBuffer` |
 | PCM 格式 | 48 kHz、双声道、32-bit float |
 | Web 接入 | 受限 remote preload + DOM MessagePort |
 | LiveKit | 仍由服务器 Vue 页面中的 `livekit-client` 发布 |
@@ -281,7 +281,14 @@ PCM 不经过 `contextBridge` 回调或高频 invoke/send：
 2. 一个 port 转交给 utilityProcess。
 3. 另一个 port 通过 `webContents.postMessage` 发送给 remote preload。
 4. preload 只在 sessionId 匹配时把 DOM MessagePort 转交给当前页面。
-5. Web AudioWorklet 消费 port 中带 sessionId 和序号的可转移 ArrayBuffer。
+5. Web AudioWorklet 消费 port 中带 sessionId 和序号的 `ArrayBuffer`。
+
+Electron 43 的 `MessagePortMain.postMessage` transfer list 只接受 `MessagePortMain`，不能转移
+`ArrayBuffer` 所有权；传入其他 transferable 会被 Electron 绑定层拒绝。因此 Main 把 port 一次性
+转交后，utilityProcess 直接向远程 DOM port 发送 PCM，`ArrayBuffer` 在 Electron structured clone
+中复制一次。Main 不接收或读取 PCM。固定格式的复制带宽约为 384 KB/s，实机长时间测试需继续
+验证消息频率、欠载和爆音；如果该复制成为瓶颈，后续必须通过独立共享内存协议解决，不能假定
+Electron 支持未公开的 ArrayBuffer transfer 行为。
 
 每个 PCM block 至少包含：
 
