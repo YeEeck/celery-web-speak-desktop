@@ -1,0 +1,74 @@
+name: 构建桌面客户端
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run package:win-dir
+      - run: npm run package:win-zip
+      - name: 安装 Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: 构建 Inno 安装器
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          iscc "/DAppVersion=$version" "/DSourceDir=$pwd\release\win-unpacked" "/DOutputDir=$pwd\release" "build\installer.iss"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: |
+            release/CeleryWebSpeak-*-windows-x64.zip
+            release/CeleryWebSpeak-Setup-*-windows-x64.exe
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Electron 集成测试
+        run: xvfb-run -a npm run test:e2e
+      - run: npm run package:linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64
+          path: release/CeleryWebSpeak-*-linux-*.AppImage
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*

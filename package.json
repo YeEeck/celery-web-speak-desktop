@@ -2,6 +2,9 @@
   "name": "celery-web-speak-desktop",
   "version": "0.1.0",
   "description": "Electron desktop shell for Celery Web Speak",
+  "author": "YeEeck",
+  "license": "GPL-3.0-only",
+  "desktopName": "celery-web-speak.desktop",
   "type": "module",
   "main": "dist/main/main.js",
   "private": true,
@@ -12,6 +15,7 @@
     "test:watch": "vitest",
     "test:e2e": "npm run build && playwright test",
     "test:e2e:linux": "npm run build && xvfb-run -a playwright test",
+    "icons": "node scripts/build-icons.mjs",
     "start": "npm run build && electron .",
     "package:linux": "npm run build && electron-builder --linux AppImage --x64",
     "package:win-dir": "npm run build && electron-builder --win --x64 --dir",
@@ -22,6 +26,8 @@
     "@types/node": "24.10.1",
     "electron": "^43.1.1",
     "electron-builder": "26.15.3",
+    "png-to-ico": "3.0.2",
+    "sharp": "0.35.3",
     "typescript": "7.0.2",
     "vitest": "4.1.10"
   },
@@ -38,13 +44,16 @@
       "package.json"
     ],
     "linux": {
+      "icon": "build/icons",
       "target": [
         "AppImage"
       ],
+      "syncDesktopName": true,
       "category": "Network;Chat",
       "artifactName": "CeleryWebSpeak-${version}-linux-${arch}.${ext}"
     },
     "win": {
+      "icon": "build/icons/icon.ico",
       "artifactName": "CeleryWebSpeak-${version}-windows-${arch}.${ext}"
     }
   }
