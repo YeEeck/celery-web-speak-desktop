@@ -1,10 +1,10 @@
 # Celery Web Speak Desktop Windows 应用音频设计
 
-> 状态：方案已确认，正在实施。
+> 状态：v0.2.0 已实现，待 Windows 实机矩阵验收。
 >
 > 设计日期：2026-07-21。
 >
-> 当前桌面实现基线：v0.1.6。
+> 当前桌面实现基线：v0.2.0。
 
 ## 文档边界
 
@@ -14,7 +14,7 @@
 
 ## 背景
 
-当前桌面客户端是薄 Electron 壳。服务器托管的 Vue 页面运行在独立 `WebContentsView` 中，继续使用 Web `livekit-client` 连接语音；远程页面没有 preload，也不能访问 Electron 或 Node API。
+当前桌面客户端是薄 Electron 壳。服务器托管的 Vue 页面运行在独立 `WebContentsView` 中，继续使用 Web `livekit-client` 连接语音；远程页面只加载应用音频专用 preload，不能访问通用 Electron 或 Node API。
 
 Chromium 不能可靠地只捕获选定 Windows 应用窗口的音频。Electron 的系统音频 loopback 同样不能提供进程隔离。Windows WASAPI Process Loopback 可以按目标 PID 及其子进程捕获音频，因此本设计增加一个 Windows x64 N-API 模块，并把它放在 Electron `utilityProcess` 中运行。
 
@@ -97,7 +97,7 @@ Main 是应用音频会话的唯一所有者。远程页面、选择器窗口和
 
 ### Remote WebContentsView
 
-当前 v0.1.6 的远程 `WebContentsView` 不加载 preload。实施后改为只加载应用音频专用 preload，同时保持：
+v0.2.0 的远程 `WebContentsView` 只加载应用音频专用 preload，同时保持：
 
 ```text
 nodeIntegration: false
