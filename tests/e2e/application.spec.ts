@@ -14,6 +14,24 @@ test('首次启动显示可用的服务器配置窗口', async () => {
     const page = await application.firstWindow()
     await expect(page.getByRole('heading', { name: '连接服务器' })).toBeVisible()
     await expect(page.getByLabel('服务器地址')).toBeFocused()
+    await expect(page.getByRole('button', { name: '最小化窗口' })).toBeVisible()
+    await expect(page.getByRole('button', { name: '最大化窗口' })).toBeVisible()
+    await expect(page.getByRole('button', { name: '关闭窗口' })).toBeVisible()
+    expect(await application.evaluate(({ Menu }) => Menu.getApplicationMenu())).toBeNull()
+    await expect(page.getByText('使用完整的 HTTP 或 HTTPS 地址')).toHaveCount(0)
+    await expect(page.getByText('桌面客户端将忽略服务器证书错误')).toHaveCount(0)
+
+    const inputAlignment = await page.getByLabel('服务器地址').evaluate((element) => {
+      const inputBounds = element.getBoundingClientRect()
+      const wrapperBounds = element.parentElement?.getBoundingClientRect()
+      return {
+        inputCenter: inputBounds.top + inputBounds.height / 2,
+        wrapperCenter: wrapperBounds ? wrapperBounds.top + wrapperBounds.height / 2 : 0,
+      }
+    })
+    expect(Math.abs(inputAlignment.inputCenter - inputAlignment.wrapperCenter)).toBeLessThanOrEqual(1)
+
+    await expect(page.locator('.window-titlebar')).toHaveCSS('height', '32px')
 
     await page.getByLabel('服务器地址').fill('https://voice.example.com/subpath')
     await page.getByRole('button', { name: '验证并进入' }).click()
@@ -46,9 +64,34 @@ test('当前 HTTP Origin 是安全上下文并自动取得麦克风', async () =
   const application = await launch(userData, { CWS_E2E_FAKE_MEDIA: '1' })
   try {
     const page = await application.firstWindow()
-    await expect(page.getByRole('heading', { name: 'HTTP voice test' })).toBeVisible()
-    await page.getByRole('button', { name: 'Open microphone' }).click()
-    await expect(page.getByTestId('result')).toHaveText('secure:true;audio:true')
+    await expect(page.getByRole('button', { name: '打开应用菜单' })).toBeVisible()
+
+    await expect.poll(() => remoteText(application, serverUrl, 'h1')).toBe('HTTP voice test')
+    const remoteState = await application.evaluate(async ({ webContents }, targetUrl) => {
+      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))
+      if (!remote) throw new Error('remote WebContentsView was not found')
+      const windowBridge = await remote.executeJavaScript('typeof window.desktopWindow')
+      const microphone = await remote.executeJavaScript(`(() => {
+        const output = document.querySelector('[data-testid="result"]')
+        document.querySelector('#open').click()
+        return new Promise((resolve, reject) => {
+          if (output.textContent) return resolve(output.textContent)
+          const observer = new MutationObserver(() => {
+            if (!output.textContent) return
+            observer.disconnect()
+            resolve(output.textContent)
+          })
+          observer.observe(output, { childList: true, characterData: true, subtree: true })
+          setTimeout(() => {
+            observer.disconnect()
+            reject(new Error('microphone result timed out'))
+          }, 8000)
+        })
+      })()`)
+      return { windowBridge, microphone }
+    }, serverUrl)
+    expect(remoteState.windowBridge).toBe('undefined')
+    expect(remoteState.microphone).toBe('secure:true;audio:true')
   } finally {
     await application.close()
     await closeServer(server)
@@ -66,6 +109,14 @@ async function launch(userData: string, extraEnv: Record<string, string> = {}): 
       ...extraEnv,
     },
   })
+}
+
+async function remoteText(application: ElectronApplication, url: string, selector: string): Promise<string | null> {
+  return application.evaluate(async ({ webContents }, input) => {
+    const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(input.url))
+    if (!remote) return null
+    return remote.executeJavaScript(`document.querySelector(${JSON.stringify(input.selector)})?.textContent ?? null`)
+  }, { url, selector })
 }
 
 async function startMediaServer(): Promise<Server> {
