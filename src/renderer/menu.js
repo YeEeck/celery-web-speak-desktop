@@ -29,7 +29,3 @@ window.addEventListener('keydown', (event) => {
   event.preventDefault()
   items[nextIndex]?.focus()
 })
-
-window.addEventListener('DOMContentLoaded', () => {
-  menuItems().find((item) => getComputedStyle(item).display !== 'none')?.focus()
-})

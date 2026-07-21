@@ -45,6 +45,8 @@ test('首次启动显示可用的服务器配置窗口', async () => {
     await expect(menuPage.getByRole('menuitem', { name: '关于 Celery Web Speak' })).toBeVisible()
     await expect(menuPage.getByRole('menuitem', { name: '切换服务器' })).toHaveCount(0)
     await expect(menuPage.locator('body')).toHaveCSS('background-color', 'rgb(17, 18, 20)')
+    expect(await menuPage.locator('.menu-item').first().evaluate((element) => element === document.activeElement)).toBe(false)
+    await expect(menuPage.locator('.menu-item').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
 
     await page.getByLabel('服务器地址').fill('https://voice.example.com/subpath')
     await page.getByRole('button', { name: '验证并进入' }).click()
@@ -84,6 +86,8 @@ test('当前 HTTP Origin 是安全上下文并自动取得麦克风', async () =
     await expect(menuPage.getByRole('menuitem', { name: '切换服务器' })).toBeVisible()
     await expect(menuPage.getByRole('menuitem', { name: '重新加载 Ctrl+R' })).toBeVisible()
     await expect(menuPage.locator('body')).toHaveCSS('background-color', 'rgb(17, 18, 20)')
+    expect(await menuPage.locator('.menu-item').first().evaluate((element) => element === document.activeElement)).toBe(false)
+    await expect(menuPage.locator('.menu-item').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
 
     await expect.poll(() => remoteText(application, serverUrl, 'h1')).toBe('HTTP voice test')
     const remoteState = await application.evaluate(async ({ webContents }, targetUrl) => {
