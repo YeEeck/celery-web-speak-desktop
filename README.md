@@ -33,7 +33,7 @@ https://voice.example.com
 - 当前服务器顶层 Origin 的权限请求自动允许，其他 Origin 拒绝。
 - 远程页面没有 Node.js、preload 或通用 Electron API。
 
-切换服务器使用应用菜单中的“服务器 -> 切换服务器”。不同 Origin 的 Cookie 与 LocalStorage 分别保留。
+切换服务器使用标题栏右上角“更多”菜单中的“切换服务器”。不同 Origin 的 Cookie 与 LocalStorage 分别保留。
 
 ## 开发
 
