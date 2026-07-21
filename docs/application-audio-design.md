@@ -294,13 +294,14 @@ remote preload 使用当前页面 Origin 调用 `window.postMessage`，固定消
 
 ```ts
 {
-  type: 'celery-web-speak:application-audio-pcm-port'
+  type: 'celery:application-audio:pcm-port'
+  protocol: 1
   sessionId: string
 }
 ```
 
 页面从对应 `MessageEvent.ports[0]` 取得唯一 PCM port，并同时校验 `event.source === window`、
-`event.origin === window.location.origin` 与当前 `sessionId`。同一 session 的重复 port 必须关闭。
+`event.origin === window.location.origin`、协议版本与当前 `sessionId`。同一 session 的重复 port 必须关闭。
 
 每个 PCM block 至少包含：
 
