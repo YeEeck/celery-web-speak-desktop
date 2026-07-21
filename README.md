@@ -6,7 +6,7 @@ Celery Web Speak 的 Windows 与 Linux Electron 客户端壳。
 
 当前版本为 `0.1.6`，已实现服务器配置、远程 Web 加载、HTTP 麦克风安全上下文、自动权限、自绘窗口框架、深色应用菜单、统一尺寸的窗口控制图标、Inno/ZIP/AppImage 打包和发布工作流。
 
-详细设计见 [docs/architecture.md](docs/architecture.md)。
+当前实现见 [架构设计](docs/architecture.md)。后续已确认但尚未实施的 Windows 应用背景音方案见 [Windows 应用音频设计](docs/application-audio-design.md)。
 
 ## 计划产物
 

@@ -4,6 +4,8 @@
 >
 > 设计日期：2026-07-21。
 
+> 后续已确认但尚未实施的 Windows 应用音频采集见 [Windows 应用音频设计](application-audio-design.md)。该方案会为远程 `WebContentsView` 增加严格限权的专用 preload，不属于本文 v0.1.6 实现基线。
+
 ## 目标
 
 - 为 Windows 10/11 x64 与主流 Linux x64 桌面提供独立应用上下文。
