@@ -468,6 +468,7 @@ Main 把原生 HRESULT 和异常映射为主设计定义的稳定错误码。日
 - capability probe 成功或失败及稳定原因。
 - capture session 状态迁移。
 - utilityProcess spawn、exit 和 timeout。
+- utilityProcess 能力探测失败时记录启动阶段、退出码或超时类别；不得记录子进程环境变量值。
 - PCM block、欠载、过载和丢帧计数。
 - 清理是否完成。
 
@@ -495,6 +496,7 @@ Main 把原生 HRESULT 和异常映射为主设计定义的稳定错误码。日
 - Windows build 在 TypeScript 构建前或后明确执行 native build，并把产物复制到稳定 `dist/native/win32-x64/` 路径。
 - `.node` 必须位于 ASAR 外或配置 `asarUnpack`，保证 utilityProcess 可以加载。
 - Windows unpacked、ZIP 与 Inno 安装器均验证二进制存在。
+- 发布构建必须实际启动打包产物内的 utilityProcess 入口并完成 `ready -> probe_result` 握手；仅检查 `.node` 文件存在不足以证明 worker 可运行。
 - Linux `dist` 不包含 Windows `.node`，能力探测固定返回 unsupported，现有 AppImage 构建不安装 MSVC 依赖。
 - package 脚本不能让 Linux `npm ci` 执行 Windows-only install hook。
 
