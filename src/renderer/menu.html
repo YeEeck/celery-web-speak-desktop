@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'" />
+    <title>应用菜单</title>
+    <link rel="stylesheet" href="./menu.css" />
+  </head>
+  <body>
+    <nav class="application-menu" aria-label="应用菜单">
+      <button class="menu-item remote-only" type="button" role="menuitem" data-menu-action="switch-server">切换服务器</button>
+      <button class="menu-item remote-only" type="button" role="menuitem" data-menu-action="reload">
+        <span>重新加载</span><kbd>Ctrl+R</kbd>
+      </button>
+      <div class="menu-separator remote-only" role="separator"></div>
+      <button class="menu-item" type="button" role="menuitem" data-menu-action="about">关于 Celery Web Speak</button>
+      <div class="menu-separator" role="separator"></div>
+      <button class="menu-item danger" type="button" role="menuitem" data-menu-action="quit">退出</button>
+    </nav>
+    <script src="./menu.js"></script>
+  </body>
+</html>

@@ -30,9 +30,9 @@ export function createSetupWindow(): BrowserWindow {
   const window = new BrowserWindow({
     title: 'Celery Web Speak',
     width: 560,
-    height: 540,
+    height: 420,
     minWidth: 520,
-    minHeight: 500,
+    minHeight: 400,
     show: false,
     frame: false,
     backgroundColor: '#313338',

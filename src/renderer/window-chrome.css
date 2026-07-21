@@ -73,7 +73,17 @@
 
 .window-titlebar-button.menu {
   width: 40px;
-  font-size: 18px;
+}
+
+.window-titlebar-button.menu > span {
+  display: block;
+  width: 3px;
+  height: 3px;
+  color: inherit;
+  background: currentColor;
+  border-radius: 50%;
+  box-shadow: -5px 0 currentColor, 5px 0 currentColor;
+  font-size: 0;
 }
 
 .window-titlebar-button:hover {

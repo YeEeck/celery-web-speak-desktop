@@ -7,7 +7,7 @@ import {
   ServerUrlError,
 } from './config.js'
 import { Logger } from './logger.js'
-import { disableApplicationMenu, showApplicationMenu } from './menu.js'
+import { disableApplicationMenu, registerApplicationMenuIpc, showApplicationMenu } from './menu.js'
 import { validateServer } from './server-validator.js'
 import { createRemoteWindow, createSetupWindow } from './windows.js'
 import { SETUP_CHANNELS, type SetupSaveRequest, type SetupState } from '../shared/setup-api.js'
@@ -68,6 +68,12 @@ async function initialize(): Promise<void> {
   logger.info('application_started', { version: app.getVersion() })
   registerSetupIpc()
   registerWindowIpc()
+  registerApplicationMenuIpc({
+    switchServer: () => showSetup(true),
+    reload: () => {
+      if (currentRemoteContents && !currentRemoteContents.isDestroyed()) currentRemoteContents.reload()
+    },
+  })
   disableApplicationMenu()
 
   const config = await store.load()
@@ -99,12 +105,7 @@ function registerWindowIpc(): void {
   ipcMain.handle(WINDOW_CHANNELS.showMenu, (event, input: unknown) => {
     const window = assertWindowSender(event.sender)
     const position = normalizeMenuPosition(input, window)
-    showApplicationMenu(window, position, !setupMode, {
-      switchServer: () => showSetup(true),
-      reload: () => {
-        if (currentRemoteContents && !currentRemoteContents.isDestroyed()) currentRemoteContents.reload()
-      },
-    })
+    showApplicationMenu(window, position, !setupMode)
   })
 }
 

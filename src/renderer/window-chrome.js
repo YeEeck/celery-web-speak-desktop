@@ -11,7 +11,7 @@ const removeMaximizedListener = windowApi.onMaximizedChange(updateMaximized)
 
 menuButton?.addEventListener('click', () => {
   const bounds = menuButton.getBoundingClientRect()
-  void windowApi.showMenu({ x: bounds.left, y: bounds.bottom })
+  void windowApi.showMenu({ x: bounds.right, y: bounds.bottom })
 })
 
 minimizeButton?.addEventListener('click', () => {
