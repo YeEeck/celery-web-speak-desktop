@@ -49,16 +49,10 @@ input {
 }
 
 .brand-mark {
-  display: grid;
   width: 40px;
   height: 40px;
-  place-items: center;
   flex: 0 0 auto;
-  color: #102117;
-  background: #58c47f;
   border-radius: 6px;
-  font-size: 22px;
-  font-weight: 800;
 }
 
 .brand-row h1,

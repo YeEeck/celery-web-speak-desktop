@@ -21,16 +21,10 @@
 }
 
 .window-titlebar-mark {
-  display: grid;
   width: 18px;
   height: 18px;
-  place-items: center;
   flex: 0 0 auto;
-  color: #102117;
-  background: #58c47f;
   border-radius: 4px;
-  font-size: 11px;
-  font-weight: 800;
 }
 
 .window-titlebar-name {
