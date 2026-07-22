@@ -15,6 +15,7 @@ menuButton?.addEventListener('click', () => {
 })
 
 minimizeButton?.addEventListener('click', () => {
+  minimizeButton.blur()
   void windowApi.minimize()
 })
 
@@ -29,6 +30,17 @@ closeButton?.addEventListener('click', () => {
 titlebar?.addEventListener('dblclick', (event) => {
   if (event.target.closest('.window-titlebar-button')) return
   void windowApi.toggleMaximize().then((state) => updateMaximized(state.maximized))
+})
+
+// 窗口恢复焦点时，强制重新计算标题栏按钮的 hover 状态。
+// 最小化期间 mouseup 事件丢失，Chromium 不会合成 mousemove 重新 hit-test，
+// 导致 :hover 背景色卡在最小化按钮上。切换 pointer-events 可强制浏览器重新评估。
+window.addEventListener('focus', () => {
+  const buttons = document.querySelectorAll('.window-titlebar-button')
+  for (const button of buttons) button.style.pointerEvents = 'none'
+  requestAnimationFrame(() => {
+    for (const button of buttons) button.style.pointerEvents = ''
+  })
 })
 
 window.addEventListener('beforeunload', removeMaximizedListener)
