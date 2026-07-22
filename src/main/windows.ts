@@ -2,6 +2,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   BrowserWindow,
+  net,
   screen,
   session,
   WebContentsView,
@@ -114,7 +115,10 @@ export function createRemoteWindow(
     if (closing) return
     event.preventDefault()
     closing = true
-    void persistWindowState(window, store).finally(() => {
+    void Promise.allSettled([
+      persistWindowState(window, store),
+      notifyServerOfVoiceLeave(config.serverUrl),
+    ]).finally(() => {
       callbacks.onRemoteClosed()
       window.destroy()
     })
@@ -146,4 +150,23 @@ async function persistWindowState(window: BrowserWindow, store: ConfigStore): Pr
   }
   await store.updateWindow(state)
   await session.fromPartition(REMOTE_PARTITION).flushStorageData()
+}
+
+// 窗口关闭时 window.destroy() 不会触发渲染进程的 pagehide，web 端的 sendBeacon
+// 无法发出。这里由主进程直接使用远程会话的登录 cookie 通知后端离开语音频道，
+// 避免成员列表出现幽灵状态。通知为尽力而为，失败时由服务端周期对账机制兜底。
+async function notifyServerOfVoiceLeave(serverUrl: string): Promise<void> {
+  try {
+    const remoteSession = session.fromPartition(REMOTE_PARTITION)
+    const cookies = await remoteSession.cookies.get({ url: serverUrl })
+    if (cookies.length === 0) return
+    const cookieHeader = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ')
+    await net.fetch(new URL('/api/voice/leave', serverUrl).toString(), {
+      method: 'POST',
+      headers: { cookie: cookieHeader },
+      signal: AbortSignal.timeout(2000),
+    })
+  } catch {
+    // 通知失败不应阻塞窗口关闭。
+  }
 }
