@@ -32,15 +32,17 @@ titlebar?.addEventListener('dblclick', (event) => {
   void windowApi.toggleMaximize().then((state) => updateMaximized(state.maximized))
 })
 
-// 窗口恢复焦点时，强制重新计算标题栏按钮的 hover 状态。
-// 最小化期间 mouseup 事件丢失，Chromium 不会合成 mousemove 重新 hit-test，
-// 导致 :hover 背景色卡在最小化按钮上。切换 pointer-events 可强制浏览器重新评估。
+// 用 JS 管理 hover 类名，替代原生 :hover 伪类。
+// 最小化期间 mouseup 丢失且 Chromium 恢复窗口时不会重新 hit-test，
+// 导致 :hover 卡死。改为类名后，窗口恢复焦点时可直接清除。
+const titlebarButtons = document.querySelectorAll('.window-titlebar-button')
+for (const button of titlebarButtons) {
+  button.addEventListener('mouseenter', () => button.classList.add('hover'))
+  button.addEventListener('mouseleave', () => button.classList.remove('hover'))
+}
+
 window.addEventListener('focus', () => {
-  const buttons = document.querySelectorAll('.window-titlebar-button')
-  for (const button of buttons) button.style.pointerEvents = 'none'
-  requestAnimationFrame(() => {
-    for (const button of buttons) button.style.pointerEvents = ''
-  })
+  for (const button of titlebarButtons) button.classList.remove('hover')
 })
 
 window.addEventListener('beforeunload', removeMaximizedListener)

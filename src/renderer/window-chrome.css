@@ -146,12 +146,12 @@
   transform: rotate(-45deg);
 }
 
-.window-titlebar-button:hover {
+.window-titlebar-button.hover {
   color: #f2f3f5;
   background: #35373c;
 }
 
-.window-titlebar-button.close:hover {
+.window-titlebar-button.close.hover {
   color: #ffffff;
   background: #da373c;
 }
