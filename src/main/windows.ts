@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  app,
   BrowserWindow,
   net,
   screen,
@@ -16,6 +17,8 @@ import { visibleWindowBounds } from './window-state.js'
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 const REMOTE_PARTITION = 'persist:celery-web-speak'
 const TITLE_BAR_HEIGHT = 32
+// 打包后由 electron-builder 处理图标，仅开发模式手动指定
+const windowIcon = app.isPackaged ? undefined : path.join(currentDirectory, '..', '..', 'build', 'icons', 'icon.png')
 
 export interface WindowCallbacks {
   onRemoteClosed(): void
@@ -30,6 +33,7 @@ export interface RemoteWindow {
 export function createSetupWindow(): BrowserWindow {
   const window = new BrowserWindow({
     title: 'Celery Web Speak',
+    ...(windowIcon && { icon: windowIcon }),
     width: 560,
     height: 420,
     minWidth: 520,
@@ -63,6 +67,7 @@ export function createRemoteWindow(
 
   const window = new BrowserWindow({
     title: 'Celery Web Speak',
+    ...(windowIcon && { icon: windowIcon }),
     ...bounds,
     center: config.window.x === null || config.window.y === null,
     minWidth: 960,
