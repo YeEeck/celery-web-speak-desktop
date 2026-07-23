@@ -1,3 +1,5 @@
+import type { UpdateStateSnapshot } from './update-api.js'
+
 export interface WindowChromeState {
   maximized: boolean
   serverUrl: string
@@ -16,7 +18,9 @@ export interface WindowApi {
   toggleMaximize(): Promise<WindowChromeState>
   close(): Promise<void>
   showMenu(position: WindowMenuPosition): Promise<void>
+  showUpdateDialog(): Promise<void>
   onMaximizedChange(listener: (maximized: boolean) => void): () => void
+  onUpdateStateChange(listener: (state: UpdateStateSnapshot) => void): () => void
 }
 
 export const WINDOW_CHANNELS = {

@@ -193,6 +193,10 @@
   -webkit-app-region: no-drag;
 }
 
+.window-titlebar-update[hidden] {
+  display: none;
+}
+
 .window-titlebar-update:hover {
   background: #6370e0;
 }

@@ -2,9 +2,21 @@ import { createRequire } from 'node:module'
 import { app, net, shell } from 'electron'
 import type { ConfigStore } from './config.js'
 import type { Logger } from './logger.js'
-import type { UpdateInfo } from '../shared/update-api.js'
+import type { UpdateCheckResult, UpdateInfo } from '../shared/update-api.js'
 
 const require = createRequire(import.meta.url)
+
+interface UpdateResponse {
+  ok: boolean
+  status: number
+  json(): Promise<unknown>
+}
+
+export interface UpdateCheckerDependencies {
+  fetch(url: string, init: RequestInit): Promise<UpdateResponse>
+  getCurrentVersion(): string
+  openExternal(url: string): Promise<unknown>
+}
 
 export interface UpdateState {
   available: boolean
@@ -15,16 +27,23 @@ export class UpdateChecker {
   private state: UpdateState = { available: false, info: null }
   private readonly repoOwner: string
   private readonly repoName: string
+  private readonly dependencies: UpdateCheckerDependencies
 
   constructor(
-    private readonly store: ConfigStore,
-    private readonly logger: Logger,
+    private readonly store: Pick<ConfigStore, 'load' | 'updatePreferences'>,
+    private readonly logger: Pick<Logger, 'info' | 'warn'>,
     private readonly notify: (state: UpdateState) => void,
+    dependencies?: UpdateCheckerDependencies,
   ) {
     const pkg = require('../../package.json') as { repository?: { url?: string } }
     const parsed = parseGitHubRepo(pkg.repository?.url ?? '')
     this.repoOwner = parsed.owner
     this.repoName = parsed.repo
+    this.dependencies = dependencies ?? {
+      fetch: (url, init) => net.fetch(url, init),
+      getCurrentVersion: () => app.getVersion(),
+      openExternal: (url) => shell.openExternal(url),
+    }
   }
 
   getState(): UpdateState {
@@ -34,10 +53,10 @@ export class UpdateChecker {
   /**
    * 检查更新。manual=true 时无视跳过记录并反馈错误。
    */
-  async check(manual: boolean): Promise<{ ok: boolean; error?: string; available: boolean; version: string }> {
+  async check(manual: boolean): Promise<UpdateCheckResult> {
     try {
       const url = `https://api.github.com/repos/${this.repoOwner}/${this.repoName}/releases/latest`
-      const response = await net.fetch(url, {
+      const response = await this.dependencies.fetch(url, {
         headers: { accept: 'application/vnd.github+json' },
         signal: AbortSignal.timeout(10_000),
       })
@@ -51,10 +70,10 @@ export class UpdateChecker {
         throw new Error('GitHub release 缺少 tag_name 或 html_url')
       }
 
-      const currentVersion = app.getVersion()
+      const currentVersion = this.dependencies.getCurrentVersion()
       if (compareVersions(latestVersion, currentVersion) <= 0) {
         this.setState({ available: false, info: null })
-        return { ok: true, available: false, version: '' }
+        return { ok: true }
       }
 
       const info: UpdateInfo = { version: latestVersion, releaseUrl }
@@ -65,17 +84,15 @@ export class UpdateChecker {
         const config = await this.store.load()
         if (config?.skippedVersion === latestVersion) {
           // 已跳过的版本：只更新状态（显示按钮），不弹窗
-          return { ok: true, available: true, version: latestVersion }
+          return { ok: true }
         }
       }
-      return { ok: true, available: true, version: latestVersion }
+      return { ok: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown error'
       this.logger.warn('update_check_failed', { message, manual })
-      // 检查失败时清除更新状态，避免按钮因过期状态持续显示
-      this.setState({ available: false, info: null })
-      if (manual) return { ok: false, error: '检查更新失败，请稍后重试', available: false, version: '' }
-      return { ok: true, available: false, version: '' }
+      if (manual) return { ok: false, error: '检查更新失败，请稍后重试' }
+      return { ok: true }
     }
   }
 
@@ -86,7 +103,7 @@ export class UpdateChecker {
 
   openReleasePage(): void {
     if (this.state.info?.releaseUrl) {
-      void shell.openExternal(this.state.info.releaseUrl)
+      void this.dependencies.openExternal(this.state.info.releaseUrl)
     }
   }
 
