@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module'
-import { net, shell } from 'electron'
+import { app, net, shell } from 'electron'
 import type { ConfigStore } from './config.js'
 import type { Logger } from './logger.js'
 import type { UpdateInfo } from '../shared/update-api.js'
@@ -51,7 +51,7 @@ export class UpdateChecker {
         throw new Error('GitHub release 缺少 tag_name 或 html_url')
       }
 
-      const currentVersion = (require('../../package.json') as { version: string }).version
+      const currentVersion = app.getVersion()
       if (compareVersions(latestVersion, currentVersion) <= 0) {
         this.setState({ available: false, info: null })
         return { ok: true, available: false, version: '' }
@@ -72,8 +72,10 @@ export class UpdateChecker {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown error'
       this.logger.warn('update_check_failed', { message, manual })
-      if (manual) return { ok: false, error: '检查更新失败，请稍后重试', available: this.state.available, version: this.state.info?.version ?? '' }
-      return { ok: true, available: this.state.available, version: this.state.info?.version ?? '' }
+      // 检查失败时清除更新状态，避免按钮因过期状态持续显示
+      this.setState({ available: false, info: null })
+      if (manual) return { ok: false, error: '检查更新失败，请稍后重试', available: false, version: '' }
+      return { ok: true, available: false, version: '' }
     }
   }
 

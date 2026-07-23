@@ -318,6 +318,8 @@ async function startupUpdateCheck(): Promise<void> {
 async function manualCheckUpdate(): Promise<void> {
   if (!updateChecker || !currentWindow || currentWindow.isDestroyed()) return
   const result = await updateChecker.check(true)
+  // 检查完成后显式重新广播状态，确保渲染进程按钮状态同步
+  broadcastUpdateState(updateChecker.getState())
   if (!result.ok) {
     void dialog.showMessageBox(currentWindow, {
       type: 'warning',

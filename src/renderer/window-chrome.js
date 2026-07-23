@@ -62,6 +62,10 @@ for (const button of titlebarButtons) {
 
 window.addEventListener('focus', () => {
   for (const button of titlebarButtons) button.classList.remove('hover')
+  // 窗口获得焦点时重新同步更新状态，防止广播丢失导致按钮状态不一致
+  void windowApi.getState().then((state) => {
+    updateUpdateButton(state.updateAvailable, state.updateVersion)
+  })
 })
 
 window.addEventListener('beforeunload', () => {
