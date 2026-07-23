@@ -1,5 +1,54 @@
-import { describe, expect, it } from 'vitest'
-import { compareVersions, normalizeTag, parseGitHubRepo } from './update-checker.js'
+import { describe, expect, it, vi } from 'vitest'
+import { UpdateChecker, compareVersions, normalizeTag, parseGitHubRepo } from './update-checker.js'
+
+describe('UpdateChecker', () => {
+  it('keeps the last successful update state when a later check fails', async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          tag_name: 'v0.2.13',
+          html_url: 'https://github.com/YeEeck/celery-web-speak-desktop/releases/tag/v0.2.13',
+        }),
+      })
+      .mockRejectedValueOnce(new Error('offline'))
+    const notify = vi.fn()
+    const checker = new UpdateChecker(
+      {
+        load: vi.fn(async () => null),
+        updatePreferences: vi.fn(async () => undefined),
+      },
+      {
+        info: vi.fn(),
+        warn: vi.fn(),
+      },
+      notify,
+      {
+        fetch: fetcher,
+        getCurrentVersion: () => '0.2.12',
+        openExternal: vi.fn(async () => undefined),
+      },
+    )
+
+    await expect(checker.check(true)).resolves.toEqual({ ok: true })
+    const successfulState = checker.getState()
+    expect(successfulState).toEqual({
+      available: true,
+      info: {
+        version: '0.2.13',
+        releaseUrl: 'https://github.com/YeEeck/celery-web-speak-desktop/releases/tag/v0.2.13',
+      },
+    })
+
+    await expect(checker.check(true)).resolves.toEqual({
+      ok: false,
+      error: '检查更新失败，请稍后重试',
+    })
+    expect(checker.getState()).toBe(successfulState)
+    expect(notify).toHaveBeenCalledTimes(1)
+  })
+})
 
 describe('parseGitHubRepo', () => {
   it('parses https URL with .git suffix', () => {

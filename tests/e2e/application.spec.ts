@@ -88,6 +88,28 @@ test('当前 HTTP Origin 是安全上下文并自动取得麦克风', async () =
   try {
     const page = await localWindow(application, 'shell.html')
     await expect(page.getByRole('button', { name: '打开应用菜单' })).toBeVisible()
+    const updateButton = page.getByRole('button', { name: '新版本' })
+    await expect(updateButton).toBeHidden()
+
+    await application.evaluate(({ dialog, net }) => {
+      const updateTestState = { dialogTitles: [] as string[], fetchCalls: 0 }
+      Object.assign(globalThis, { updateTestState })
+      net.fetch = async () => {
+        updateTestState.fetchCalls += 1
+        return new Response(JSON.stringify({
+          tag_name: 'v9.9.9',
+          html_url: 'https://github.com/YeEeck/celery-web-speak-desktop/releases/tag/v9.9.9',
+        }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      dialog.showMessageBox = async (...args) => {
+        const options = args.length === 2 ? args[1] : args[0]
+        updateTestState.dialogTitles.push(options?.title ?? '')
+        return { response: 2, checkboxChecked: false }
+      }
+    })
     expect(await page.evaluate(() => typeof (window as unknown as {
       desktopApplicationAudio?: unknown
     }).desktopApplicationAudio)).toBe('undefined')
@@ -99,6 +121,36 @@ test('当前 HTTP Origin 是安全上下文并自动取得麦克风', async () =
     await expect(menuPage.locator('body')).toHaveCSS('background-color', 'rgb(17, 18, 20)')
     expect(await menuPage.locator('.menu-item').first().evaluate((element) => element === document.activeElement)).toBe(false)
     await expect(menuPage.locator('.menu-item').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    await menuPage.getByRole('menuitem', { name: '检查更新', exact: true }).click()
+
+    await expect(updateButton).toBeVisible()
+    await expect(updateButton).toHaveAttribute('title', 'v9.9.9 可用')
+    await expect.poll(() => application.evaluate(() => (
+      (globalThis as unknown as { updateTestState: { dialogTitles: string[] } }).updateTestState.dialogTitles
+    ))).toEqual(['发现新版本'])
+
+    await updateButton.click()
+    await expect.poll(() => application.evaluate(() => (
+      (globalThis as unknown as { updateTestState: { dialogTitles: string[]; fetchCalls: number } }).updateTestState
+    ))).toEqual({ dialogTitles: ['发现新版本', '发现新版本'], fetchCalls: 1 })
+
+    await application.evaluate(({ dialog }) => {
+      dialog.showMessageBox = (...args) => {
+        const options = args.length === 2 ? args[1] : args[0]
+        const state = (globalThis as unknown as {
+          updateTestState: { dialogTitles: string[] }
+        }).updateTestState
+        state.dialogTitles.push(options?.title ?? '')
+        return new Promise(() => undefined)
+      }
+    })
+    await updateButton.dblclick()
+    await expect.poll(() => application.evaluate(() => (
+      (globalThis as unknown as { updateTestState: { dialogTitles: string[]; fetchCalls: number } }).updateTestState
+    ))).toEqual({ dialogTitles: ['发现新版本', '发现新版本', '发现新版本'], fetchCalls: 1 })
+    expect(await application.evaluate(({ BrowserWindow }) => (
+      BrowserWindow.getAllWindows()[0]?.isMaximized()
+    ))).toBe(false)
 
     await expect.poll(() => remoteText(application, serverUrl, 'h1')).toBe('HTTP voice test')
     const remoteState = await application.evaluate(async ({ webContents }, targetUrl) => {
