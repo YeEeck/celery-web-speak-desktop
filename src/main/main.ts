@@ -41,6 +41,7 @@ let setupMode = false
 let setupCanCancel = false
 let setupStartupError = ''
 let quitting = false
+let updateDialogOpen = false
 let store: ConfigStore
 let logger: Logger
 let applicationAudio: ApplicationAudioCoordinator | null = null
@@ -269,24 +270,9 @@ function safeErrorMessage(error: unknown): string {
 }
 
 function registerUpdateIpc(): void {
-  ipcMain.handle(UPDATE_CHANNELS.check, async (event) => {
+  ipcMain.handle(UPDATE_CHANNELS.showDialog, (event) => {
     assertWindowSender(event.sender)
-    return await updateChecker!.check(true)
-  })
-
-  ipcMain.handle(UPDATE_CHANNELS.dismiss, (event) => {
-    assertWindowSender(event.sender)
-  })
-
-  ipcMain.handle(UPDATE_CHANNELS.skipVersion, async (event) => {
-    assertWindowSender(event.sender)
-    const version = updateChecker?.getState().info?.version
-    if (version) await updateChecker!.skipVersion(version)
-  })
-
-  ipcMain.handle(UPDATE_CHANNELS.openRelease, (event) => {
-    assertWindowSender(event.sender)
-    updateChecker?.openReleasePage()
+    showUpdateDialog()
   })
 }
 
@@ -318,8 +304,6 @@ async function startupUpdateCheck(): Promise<void> {
 async function manualCheckUpdate(): Promise<void> {
   if (!updateChecker || !currentWindow || currentWindow.isDestroyed()) return
   const result = await updateChecker.check(true)
-  // 检查完成后显式重新广播状态，确保渲染进程按钮状态同步
-  broadcastUpdateState(updateChecker.getState())
   if (!result.ok) {
     void dialog.showMessageBox(currentWindow, {
       type: 'warning',
@@ -341,9 +325,10 @@ async function manualCheckUpdate(): Promise<void> {
 }
 
 function showUpdateDialog(): void {
-  if (!updateChecker || !currentWindow || currentWindow.isDestroyed()) return
+  if (!updateChecker || !currentWindow || currentWindow.isDestroyed() || updateDialogOpen) return
   const state = updateChecker.getState()
   if (!state.info) return
+  updateDialogOpen = true
   void dialog
     .showMessageBox(currentWindow, {
       type: 'info',
@@ -357,6 +342,9 @@ function showUpdateDialog(): void {
       if (response === 0) updateChecker!.openReleasePage()
       else if (response === 1) void updateChecker!.skipVersion(state.info!.version)
     })
+    .finally(() => {
+      updateDialogOpen = false
+    })
 }
 
 async function toggleAutoCheckUpdate(): Promise<void> {
@@ -366,4 +354,3 @@ async function toggleAutoCheckUpdate(): Promise<void> {
   await store.updatePreferences({ autoCheckUpdate: next })
   logger.info('auto_check_update_toggled', { enabled: next })
 }
-

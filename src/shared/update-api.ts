@@ -4,14 +4,15 @@ export interface UpdateInfo {
 }
 
 export interface UpdateCheckResult {
+  ok: boolean
+  error?: string
+}
+
+export interface UpdateStateSnapshot {
   available: boolean
-  info: UpdateInfo | null
+  version: string
 }
 
 export const UPDATE_CHANNELS = {
-  check: 'update:check',
-  dismiss: 'update:dismiss',
-  skipVersion: 'update:skip-version',
-  openRelease: 'update:open-release',
-  stateChanged: 'update:state-changed',
+  showDialog: 'update:show-dialog',
 } as const

@@ -26,11 +26,7 @@ menuButton?.addEventListener('click', () => {
 })
 
 updateButton?.addEventListener('click', () => {
-  void windowApi.checkUpdate().then((result) => {
-    if (result && typeof result.available === 'boolean') {
-      updateUpdateButton(result.available, result.version ?? '')
-    }
-  })
+  void windowApi.showUpdateDialog()
 })
 
 minimizeButton?.addEventListener('click', () => {
@@ -47,7 +43,7 @@ closeButton?.addEventListener('click', () => {
 })
 
 titlebar?.addEventListener('dblclick', (event) => {
-  if (event.target.closest('.window-titlebar-button')) return
+  if (event.target.closest('button')) return
   void windowApi.toggleMaximize().then((state) => updateMaximized(state.maximized))
 })
 
@@ -62,10 +58,6 @@ for (const button of titlebarButtons) {
 
 window.addEventListener('focus', () => {
   for (const button of titlebarButtons) button.classList.remove('hover')
-  // 窗口获得焦点时重新同步更新状态，防止广播丢失导致按钮状态不一致
-  void windowApi.getState().then((state) => {
-    updateUpdateButton(state.updateAvailable, state.updateVersion)
-  })
 })
 
 window.addEventListener('beforeunload', () => {
@@ -92,5 +84,7 @@ function updateUpdateButton(available, version) {
   updateButton.hidden = !available
   if (available && version) {
     updateButton.title = `v${version} 可用`
+  } else {
+    updateButton.removeAttribute('title')
   }
 }
