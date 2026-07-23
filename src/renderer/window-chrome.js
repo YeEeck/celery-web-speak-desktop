@@ -1,12 +1,16 @@
 const windowApi = window.desktopWindow
 const titlebar = document.querySelector('.window-titlebar')
+const serverUrlElement = document.querySelector('.window-titlebar-url')
 const menuButton = document.querySelector('[data-window-action="menu"]')
 const minimizeButton = document.querySelector('[data-window-action="minimize"]')
 const maximizeButton = document.querySelector('[data-window-action="maximize"]')
 const maximizeIcon = maximizeButton?.querySelector('[aria-hidden="true"]')
 const closeButton = document.querySelector('[data-window-action="close"]')
 
-void windowApi.getState().then((state) => updateMaximized(state.maximized))
+void windowApi.getState().then((state) => {
+  updateMaximized(state.maximized)
+  updateServerUrl(state.serverUrl)
+})
 const removeMaximizedListener = windowApi.onMaximizedChange(updateMaximized)
 
 menuButton?.addEventListener('click', () => {
@@ -52,4 +56,11 @@ function updateMaximized(maximized) {
   maximizeButton.setAttribute('aria-label', maximized ? '还原窗口' : '最大化窗口')
   maximizeButton.title = maximized ? '还原' : '最大化'
   maximizeIcon.classList.toggle('restore', maximized)
+}
+
+function updateServerUrl(serverUrl) {
+  if (!serverUrlElement || !serverUrl) return
+  serverUrlElement.textContent = serverUrl
+  serverUrlElement.title = serverUrl
+  serverUrlElement.hidden = false
 }

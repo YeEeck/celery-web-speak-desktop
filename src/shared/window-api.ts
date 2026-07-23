@@ -1,5 +1,6 @@
 export interface WindowChromeState {
   maximized: boolean
+  serverUrl: string
 }
 
 export interface WindowMenuPosition {

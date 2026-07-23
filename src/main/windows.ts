@@ -66,7 +66,7 @@ export function createRemoteWindow(
   configureSessionPolicy(remoteSession, config.serverUrl)
 
   const window = new BrowserWindow({
-    title: 'Celery Web Speak',
+    title: `Celery Web Speak - ${config.serverUrl}`,
     ...(windowIcon && { icon: windowIcon }),
     ...bounds,
     center: config.window.x === null || config.window.y === null,

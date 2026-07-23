@@ -34,6 +34,7 @@ if (!hasSingleInstanceLock) app.quit()
 
 let currentWindow: BrowserWindow | null = null
 let currentRemoteContents: WebContents | null = null
+let currentServerUrl = ''
 let setupMode = false
 let setupCanCancel = false
 let setupStartupError = ''
@@ -88,7 +89,7 @@ async function initialize(): Promise<void> {
 function registerWindowIpc(): void {
   ipcMain.handle(WINDOW_CHANNELS.getState, (event) => {
     const window = assertWindowSender(event.sender)
-    return { maximized: window.isMaximized() }
+    return { maximized: window.isMaximized(), serverUrl: currentServerUrl }
   })
 
   ipcMain.handle(WINDOW_CHANNELS.minimize, (event) => {
@@ -165,6 +166,7 @@ function showSetup(canCancel: boolean, startupError = ''): void {
   setupMode = true
   setupCanCancel = canCancel
   setupStartupError = startupError
+  currentServerUrl = ''
   const previous = currentWindow
   applicationAudio?.unbindRemote()
   currentRemoteContents = null
@@ -175,6 +177,7 @@ function showSetup(canCancel: boolean, startupError = ''): void {
 
 function showRemote(config: NonNullable<Awaited<ReturnType<ConfigStore['load']>>>): void {
   setupMode = false
+  currentServerUrl = config.serverUrl
   const previous = currentWindow
   const remote = createRemoteWindow(config, store, app.isPackaged, {
     onRemoteClosed: () => {
