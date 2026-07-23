@@ -44,6 +44,7 @@ Name: "{group}\Celery Web Speak"; Filename: "{app}\Celery Web Speak.exe"
 Name: "{autodesktop}\Celery Web Speak"; Filename: "{app}\Celery Web Speak.exe"; Tasks: desktopicon
 
 [Run]
+Filename: "ie4uinit.exe"; Parameters: "-show"; Flags: runhidden; Description: "刷新图标缓存"
 Filename: "{app}\Celery Web Speak.exe"; Description: "{cm:LaunchProgram,Celery Web Speak}"; Flags: nowait postinstall skipifsilent
 
 [Code]
