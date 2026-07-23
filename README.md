@@ -4,7 +4,7 @@ Celery Web Speak 的 Windows 与 Linux Electron 客户端壳。
 
 客户端不打包服务器 Web UI，而是加载用户配置的 Celery Web Speak 服务器。登录 Cookie、LocalStorage 和其他站点数据保存在 Electron 独立用户目录中，不与系统浏览器共享。
 
-当前版本为 `0.2.3`，已实现服务器配置、远程 Web 加载、HTTP 麦克风安全上下文、自动权限、自绘窗口框架、深色应用菜单，以及 Windows 应用音频的本地来源选择、Process Loopback 采集和受限 Bridge。
+当前版本为 `0.2.12`，已实现服务器配置、远程 Web 加载、HTTP 麦克风安全上下文、自动权限、自绘窗口框架、深色应用菜单、GitHub Releases 更新检查，以及 Windows 应用音频的本地来源选择、Process Loopback 采集和受限 Bridge。
 
 当前实现见 [架构设计](docs/architecture.md)，Windows 应用音频的原生采集与安全边界见 [Windows 应用音频设计](docs/application-audio-design.md)。
 
@@ -14,7 +14,7 @@ Celery Web Speak 的 Windows 与 Linux Electron 客户端壳。
 - Windows x64 便携 ZIP
 - Linux x64 AppImage
 
-Windows 安装器按当前用户安装，不请求管理员权限。项目不包含自动更新、遥测、托盘常驻和开机启动。
+Windows 安装器按当前用户安装，不请求管理员权限。项目不包含自动下载安装、遥测、托盘常驻和开机启动。
 
 ## 使用
 
@@ -34,6 +34,12 @@ https://voice.example.com
 - 远程页面没有 Node.js、preload 或通用 Electron API。
 
 切换服务器使用标题栏右上角“更多”菜单中的“切换服务器”。不同 Origin 的 Cookie 与 LocalStorage 分别保留。
+
+## 更新检查
+
+客户端启动后可自动查询 GitHub Releases，也可以从标题栏右上角“更多”菜单手动检查。更新检查只提示并打开 Release 下载页，不会自动下载或安装。
+
+只有最近一次成功检查确认存在新版本时，标题栏才显示“新版本”按钮；点击按钮会重新显示该版本的更新对话框。临时网络错误不会清除最近一次成功检查得到的更新信息。
 
 ## 开发
 
