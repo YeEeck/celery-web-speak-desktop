@@ -1,6 +1,6 @@
 {
   "name": "celery-web-speak-desktop",
-  "version": "0.2.12",
+  "version": "0.2.13",
   "description": "Electron desktop shell for Celery Web Speak",
   "author": "YeEeck",
   "license": "GPL-3.0-only",
