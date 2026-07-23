@@ -34,7 +34,7 @@ export class UpdateChecker {
   /**
    * 检查更新。manual=true 时无视跳过记录并反馈错误。
    */
-  async check(manual: boolean): Promise<{ ok: boolean; error?: string }> {
+  async check(manual: boolean): Promise<{ ok: boolean; error?: string; available: boolean; version: string }> {
     try {
       const url = `https://api.github.com/repos/${this.repoOwner}/${this.repoName}/releases/latest`
       const response = await net.fetch(url, {
@@ -54,7 +54,7 @@ export class UpdateChecker {
       const currentVersion = (require('../../package.json') as { version: string }).version
       if (compareVersions(latestVersion, currentVersion) <= 0) {
         this.setState({ available: false, info: null })
-        return { ok: true }
+        return { ok: true, available: false, version: '' }
       }
 
       const info: UpdateInfo = { version: latestVersion, releaseUrl }
@@ -65,15 +65,15 @@ export class UpdateChecker {
         const config = await this.store.load()
         if (config?.skippedVersion === latestVersion) {
           // 已跳过的版本：只更新状态（显示按钮），不弹窗
-          return { ok: true }
+          return { ok: true, available: true, version: latestVersion }
         }
       }
-      return { ok: true }
+      return { ok: true, available: true, version: latestVersion }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown error'
       this.logger.warn('update_check_failed', { message, manual })
-      if (manual) return { ok: false, error: '检查更新失败，请稍后重试' }
-      return { ok: true }
+      if (manual) return { ok: false, error: '检查更新失败，请稍后重试', available: this.state.available, version: this.state.info?.version ?? '' }
+      return { ok: true, available: this.state.available, version: this.state.info?.version ?? '' }
     }
   }
 

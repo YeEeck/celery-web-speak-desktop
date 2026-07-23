@@ -26,7 +26,11 @@ menuButton?.addEventListener('click', () => {
 })
 
 updateButton?.addEventListener('click', () => {
-  void windowApi.checkUpdate()
+  void windowApi.checkUpdate().then((result) => {
+    if (result && typeof result.available === 'boolean') {
+      updateUpdateButton(result.available, result.version ?? '')
+    }
+  })
 })
 
 minimizeButton?.addEventListener('click', () => {
