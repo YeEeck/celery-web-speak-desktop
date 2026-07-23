@@ -42,6 +42,8 @@ describe('ConfigStore', () => {
       version: 1,
       serverUrl: 'https://voice.example.com',
       window: DEFAULT_WINDOW_STATE,
+      autoCheckUpdate: true,
+      skippedVersion: null,
     })
     expect(readStartupServerUrl(directory)).toBe('https://voice.example.com')
     expect(JSON.parse(await readFile(store.filePath, 'utf8'))).toMatchObject({ version: 1 })

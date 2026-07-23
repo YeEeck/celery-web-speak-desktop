@@ -2,6 +2,7 @@ const windowApi = window.desktopWindow
 const titlebar = document.querySelector('.window-titlebar')
 const serverUrlElement = document.querySelector('.window-titlebar-url')
 const menuButton = document.querySelector('[data-window-action="menu"]')
+const updateButton = document.querySelector('[data-window-action="update"]')
 const minimizeButton = document.querySelector('[data-window-action="minimize"]')
 const maximizeButton = document.querySelector('[data-window-action="maximize"]')
 const maximizeIcon = maximizeButton?.querySelector('[aria-hidden="true"]')
@@ -10,12 +11,22 @@ const closeButton = document.querySelector('[data-window-action="close"]')
 void windowApi.getState().then((state) => {
   updateMaximized(state.maximized)
   updateServerUrl(state.serverUrl)
+  updateUpdateButton(state.updateAvailable, state.updateVersion)
 })
 const removeMaximizedListener = windowApi.onMaximizedChange(updateMaximized)
+const removeUpdateListener = windowApi.onUpdateStateChange
+  ? windowApi.onUpdateStateChange((state) => {
+      updateUpdateButton(state.available, state.version)
+    })
+  : null
 
 menuButton?.addEventListener('click', () => {
   const bounds = menuButton.getBoundingClientRect()
   void windowApi.showMenu({ x: bounds.right, y: bounds.bottom })
+})
+
+updateButton?.addEventListener('click', () => {
+  void windowApi.checkUpdate()
 })
 
 minimizeButton?.addEventListener('click', () => {
@@ -49,7 +60,10 @@ window.addEventListener('focus', () => {
   for (const button of titlebarButtons) button.classList.remove('hover')
 })
 
-window.addEventListener('beforeunload', removeMaximizedListener)
+window.addEventListener('beforeunload', () => {
+  removeMaximizedListener()
+  removeUpdateListener?.()
+})
 
 function updateMaximized(maximized) {
   if (!maximizeButton || !maximizeIcon) return
@@ -63,4 +77,12 @@ function updateServerUrl(serverUrl) {
   serverUrlElement.textContent = serverUrl
   serverUrlElement.title = serverUrl
   serverUrlElement.hidden = false
+}
+
+function updateUpdateButton(available, version) {
+  if (!updateButton) return
+  updateButton.hidden = !available
+  if (available && version) {
+    updateButton.title = `v${version} 可用`
+  }
 }

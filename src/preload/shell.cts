@@ -7,6 +7,11 @@ const channels = {
   close: 'window:close',
   showMenu: 'window:show-menu',
   maximizedChanged: 'window:maximized-changed',
+  updateStateChanged: 'window:update-state-changed',
+  updateCheck: 'update:check',
+  updateDismiss: 'update:dismiss',
+  updateSkipVersion: 'update:skip-version',
+  updateOpenRelease: 'update:open-release',
 } as const
 
 contextBridge.exposeInMainWorld('desktopWindow', {
@@ -19,5 +24,13 @@ contextBridge.exposeInMainWorld('desktopWindow', {
     const handler = (_event: Electron.IpcRendererEvent, maximized: boolean) => listener(maximized)
     ipcRenderer.on(channels.maximizedChanged, handler)
     return () => ipcRenderer.removeListener(channels.maximizedChanged, handler)
+  },
+  checkUpdate: () => ipcRenderer.invoke(channels.updateCheck),
+  openRelease: () => ipcRenderer.invoke(channels.updateOpenRelease),
+  skipVersion: () => ipcRenderer.invoke(channels.updateSkipVersion),
+  onUpdateStateChange: (listener: (state: { available: boolean; version: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: { available: boolean; version: string }) => listener(state)
+    ipcRenderer.on(channels.updateStateChanged, handler)
+    return () => ipcRenderer.removeListener(channels.updateStateChanged, handler)
   },
 })

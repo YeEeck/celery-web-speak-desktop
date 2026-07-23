@@ -4,6 +4,10 @@
   "description": "Electron desktop shell for Celery Web Speak",
   "author": "YeEeck",
   "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YeEeck/celery-web-speak-desktop.git"
+  },
   "desktopName": "celery-web-speak.desktop",
   "type": "module",
   "main": "dist/main/main.js",

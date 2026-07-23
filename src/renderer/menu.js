@@ -1,8 +1,13 @@
 const menuApi = window.desktopMenu
 const remoteMode = new URLSearchParams(window.location.search).get('mode') === 'remote'
 const menuItems = () => [...document.querySelectorAll('.menu-item:not([hidden])')]
+const autoCheckItem = document.querySelector('[data-menu-action="toggle-auto-check"]')
 
 document.body.classList.toggle('remote-mode', remoteMode)
+
+void menuApi.getState().then((state) => {
+  if (autoCheckItem) autoCheckItem.classList.toggle('checked', state.autoCheckUpdate)
+})
 
 for (const item of document.querySelectorAll('[data-menu-action]')) {
   item.addEventListener('click', () => {

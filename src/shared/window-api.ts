@@ -1,6 +1,8 @@
 export interface WindowChromeState {
   maximized: boolean
   serverUrl: string
+  updateAvailable: boolean
+  updateVersion: string
 }
 
 export interface WindowMenuPosition {
@@ -24,4 +26,5 @@ export const WINDOW_CHANNELS = {
   close: 'window:close',
   showMenu: 'window:show-menu',
   maximizedChanged: 'window:maximized-changed',
+  updateStateChanged: 'window:update-state-changed',
 } as const

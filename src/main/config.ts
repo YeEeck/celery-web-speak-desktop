@@ -15,6 +15,8 @@ export interface AppConfig {
   version: 1
   serverUrl: string
   window: WindowState
+  autoCheckUpdate: boolean
+  skippedVersion: string | null
 }
 
 export const DEFAULT_WINDOW_STATE: WindowState = {
@@ -88,6 +90,8 @@ export class ConfigStore {
       version: 1,
       serverUrl: normalizeServerUrl(serverUrl),
       window: normalizeWindowState(windowState),
+      autoCheckUpdate: true,
+      skippedVersion: null,
     }
     await this.write(config)
     return config
@@ -97,6 +101,12 @@ export class ConfigStore {
     const current = await this.load()
     if (!current) return
     await this.write({ ...current, window: normalizeWindowState(windowState) })
+  }
+
+  async updatePreferences(prefs: Partial<Pick<AppConfig, 'autoCheckUpdate' | 'skippedVersion'>>): Promise<void> {
+    const current = await this.load()
+    if (!current) return
+    await this.write({ ...current, ...prefs })
   }
 
   private async write(config: AppConfig): Promise<void> {
@@ -114,6 +124,8 @@ function parseConfig(value: unknown): AppConfig | null {
       version: 1,
       serverUrl: normalizeServerUrl(value.serverUrl),
       window: normalizeWindowState(value.window),
+      autoCheckUpdate: value.autoCheckUpdate !== false,
+      skippedVersion: typeof value.skippedVersion === 'string' ? value.skippedVersion : null,
     }
   } catch {
     return null

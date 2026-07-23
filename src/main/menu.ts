@@ -6,14 +6,17 @@ import type { WindowMenuPosition } from '../shared/window-api.js'
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 const MENU_WIDTH = 220
-const REMOTE_MENU_HEIGHT = 166
-const SETUP_MENU_HEIGHT = 89
+const REMOTE_MENU_HEIGHT = 243
+const SETUP_MENU_HEIGHT = 166
 
 let activeMenu: BrowserWindow | null = null
+let menuAutoCheckUpdate = true
 
 export interface MenuActions {
   switchServer(): void
   reload(): void
+  checkUpdate(): void
+  toggleAutoCheck(): void
 }
 
 export function disableApplicationMenu(): void {
@@ -21,6 +24,11 @@ export function disableApplicationMenu(): void {
 }
 
 export function registerApplicationMenuIpc(actions: MenuActions): void {
+  ipcMain.handle(MENU_CHANNELS.getState, (event) => {
+    assertMenuSender(event.sender)
+    return { autoCheckUpdate: menuAutoCheckUpdate }
+  })
+
   ipcMain.handle(MENU_CHANNELS.execute, (event, input: unknown) => {
     const menu = assertMenuSender(event.sender)
     const parent = menu.getParentWindow()
@@ -29,6 +37,8 @@ export function registerApplicationMenuIpc(actions: MenuActions): void {
 
     if (action === 'switch-server') actions.switchServer()
     else if (action === 'reload') actions.reload()
+    else if (action === 'check-update') actions.checkUpdate()
+    else if (action === 'toggle-auto-check') actions.toggleAutoCheck()
     else if (action === 'quit') app.quit()
     else if (parent && !parent.isDestroyed()) {
       void dialog.showMessageBox(parent, {
@@ -50,8 +60,10 @@ export function showApplicationMenu(
   window: BrowserWindow,
   position: WindowMenuPosition,
   remoteMode: boolean,
+  autoCheckUpdate: boolean,
 ): void {
   closeActiveMenu()
+  menuAutoCheckUpdate = autoCheckUpdate
   const height = remoteMode ? REMOTE_MENU_HEIGHT : SETUP_MENU_HEIGHT
   const parentBounds = window.getBounds()
   const workArea = screen.getDisplayMatching(parentBounds).workArea
@@ -111,7 +123,14 @@ function assertMenuSender(sender: Electron.WebContents): BrowserWindow {
 }
 
 function normalizeMenuAction(input: unknown): ApplicationMenuAction {
-  if (input === 'switch-server' || input === 'reload' || input === 'about' || input === 'quit') {
+  if (
+    input === 'switch-server' ||
+    input === 'reload' ||
+    input === 'check-update' ||
+    input === 'toggle-auto-check' ||
+    input === 'about' ||
+    input === 'quit'
+  ) {
     return input
   }
   throw new Error('Unknown application menu action')

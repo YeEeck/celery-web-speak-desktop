@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { app, ipcMain, net, type BrowserWindow, type WebContents } from 'electron'
+import { app, dialog, ipcMain, net, type BrowserWindow, type WebContents } from 'electron'
 import {
   ConfigStore,
   normalizeServerUrl,
@@ -11,8 +11,10 @@ import { disableApplicationMenu, registerApplicationMenuIpc, showApplicationMenu
 import { validateServer } from './server-validator.js'
 import { createRemoteWindow, createSetupWindow } from './windows.js'
 import { ApplicationAudioCoordinator } from './application-audio.js'
+import { UpdateChecker } from './update-checker.js'
 import { SETUP_CHANNELS, type SetupSaveRequest, type SetupState } from '../shared/setup-api.js'
 import { WINDOW_CHANNELS, type WindowMenuPosition } from '../shared/window-api.js'
+import { UPDATE_CHANNELS } from '../shared/update-api.js'
 
 app.setName('Celery Web Speak')
 if (!app.isPackaged && process.env.CWS_USER_DATA_DIR) {
@@ -42,6 +44,7 @@ let quitting = false
 let store: ConfigStore
 let logger: Logger
 let applicationAudio: ApplicationAudioCoordinator | null = null
+let updateChecker: UpdateChecker | null = null
 
 app.on('certificate-error', (event, _webContents, _url, _error, _certificate, callback) => {
   event.preventDefault()
@@ -70,26 +73,38 @@ async function initialize(): Promise<void> {
   store = new ConfigStore(app.getPath('userData'))
   logger = new Logger(app.getPath('userData'))
   applicationAudio = new ApplicationAudioCoordinator(logger)
+  updateChecker = new UpdateChecker(store, logger, broadcastUpdateState)
   logger.info('application_started', { version: app.getVersion() })
   registerSetupIpc()
   registerWindowIpc()
+  registerUpdateIpc()
   registerApplicationMenuIpc({
     switchServer: () => showSetup(true),
     reload: () => {
       if (currentRemoteContents && !currentRemoteContents.isDestroyed()) currentRemoteContents.reload()
     },
+    checkUpdate: () => void manualCheckUpdate(),
+    toggleAutoCheck: () => void toggleAutoCheckUpdate(),
   })
   disableApplicationMenu()
 
   const config = await store.load()
   if (config) showRemote(config)
   else showSetup(false)
+
+  scheduleStartupUpdateCheck()
 }
 
 function registerWindowIpc(): void {
   ipcMain.handle(WINDOW_CHANNELS.getState, (event) => {
     const window = assertWindowSender(event.sender)
-    return { maximized: window.isMaximized(), serverUrl: currentServerUrl }
+    const updateState = updateChecker?.getState()
+    return {
+      maximized: window.isMaximized(),
+      serverUrl: currentServerUrl,
+      updateAvailable: updateState?.available ?? false,
+      updateVersion: updateState?.info?.version ?? '',
+    }
   })
 
   ipcMain.handle(WINDOW_CHANNELS.minimize, (event) => {
@@ -107,10 +122,11 @@ function registerWindowIpc(): void {
     assertWindowSender(event.sender).close()
   })
 
-  ipcMain.handle(WINDOW_CHANNELS.showMenu, (event, input: unknown) => {
+  ipcMain.handle(WINDOW_CHANNELS.showMenu, async (event, input: unknown) => {
     const window = assertWindowSender(event.sender)
     const position = normalizeMenuPosition(input, window)
-    showApplicationMenu(window, position, !setupMode)
+    const config = await store.load()
+    showApplicationMenu(window, position, !setupMode, config?.autoCheckUpdate ?? true)
   })
 }
 
@@ -251,3 +267,101 @@ function setupError(error: unknown) {
 function safeErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'unknown error'
 }
+
+function registerUpdateIpc(): void {
+  ipcMain.handle(UPDATE_CHANNELS.check, async (event) => {
+    assertWindowSender(event.sender)
+    return await updateChecker!.check(true)
+  })
+
+  ipcMain.handle(UPDATE_CHANNELS.dismiss, (event) => {
+    assertWindowSender(event.sender)
+  })
+
+  ipcMain.handle(UPDATE_CHANNELS.skipVersion, async (event) => {
+    assertWindowSender(event.sender)
+    const version = updateChecker?.getState().info?.version
+    if (version) await updateChecker!.skipVersion(version)
+  })
+
+  ipcMain.handle(UPDATE_CHANNELS.openRelease, (event) => {
+    assertWindowSender(event.sender)
+    updateChecker?.openReleasePage()
+  })
+}
+
+function broadcastUpdateState(state: { available: boolean; info: { version: string } | null }): void {
+  if (!currentWindow || currentWindow.isDestroyed()) return
+  if (currentWindow.webContents.isDestroyed()) return
+  currentWindow.webContents.send(WINDOW_CHANNELS.updateStateChanged, {
+    available: state.available,
+    version: state.info?.version ?? '',
+  })
+}
+
+function scheduleStartupUpdateCheck(): void {
+  if (!app.isPackaged) return
+  void store.load().then((config) => {
+    if (config && !config.autoCheckUpdate) return
+    setTimeout(() => void startupUpdateCheck(), 4000)
+  })
+}
+
+async function startupUpdateCheck(): Promise<void> {
+  if (!updateChecker) return
+  await updateChecker.check(false)
+  if (await updateChecker.shouldShowDialogOnStartup()) {
+    showUpdateDialog()
+  }
+}
+
+async function manualCheckUpdate(): Promise<void> {
+  if (!updateChecker || !currentWindow || currentWindow.isDestroyed()) return
+  const result = await updateChecker.check(true)
+  if (!result.ok) {
+    void dialog.showMessageBox(currentWindow, {
+      type: 'warning',
+      title: '检查更新',
+      message: result.error ?? '检查更新失败',
+    })
+    return
+  }
+  const state = updateChecker.getState()
+  if (!state.available) {
+    void dialog.showMessageBox(currentWindow, {
+      type: 'info',
+      title: '检查更新',
+      message: '当前已是最新版本',
+    })
+    return
+  }
+  showUpdateDialog()
+}
+
+function showUpdateDialog(): void {
+  if (!updateChecker || !currentWindow || currentWindow.isDestroyed()) return
+  const state = updateChecker.getState()
+  if (!state.info) return
+  void dialog
+    .showMessageBox(currentWindow, {
+      type: 'info',
+      title: '发现新版本',
+      message: `当前版本 v${app.getVersion()}，最新版本 v${state.info.version}`,
+      buttons: ['前往下载', '跳过此版本', '稍后提醒'],
+      defaultId: 0,
+      cancelId: 2,
+    })
+    .then(({ response }) => {
+      if (response === 0) updateChecker!.openReleasePage()
+      else if (response === 1) void updateChecker!.skipVersion(state.info!.version)
+    })
+}
+
+async function toggleAutoCheckUpdate(): Promise<void> {
+  const config = await store.load()
+  if (!config) return
+  const next = !config.autoCheckUpdate
+  await store.updatePreferences({ autoCheckUpdate: next })
+  logger.info('auto_check_update_toggled', { enabled: next })
+}
+

@@ -84,3 +84,16 @@ body {
 body:not(.remote-mode) .remote-only {
   display: none;
 }
+
+.menu-check {
+  display: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  background: currentColor;
+  clip-path: polygon(14% 44%, 0% 60%, 40% 100%, 100% 16%, 84% 0%, 38% 72%);
+}
+
+.menu-item.checked .menu-check {
+  display: block;
+}
