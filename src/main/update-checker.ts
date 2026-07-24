@@ -63,7 +63,7 @@ export class UpdateChecker {
       if (!response.ok) {
         throw new Error(`GitHub API responded ${response.status}`)
       }
-      const data = (await response.json()) as { tag_name?: string; html_url?: string }
+      const data = (await response.json()) as { tag_name?: string; html_url?: string; body?: string }
       const latestVersion = normalizeTag(data.tag_name ?? '')
       const releaseUrl = data.html_url ?? ''
       if (!latestVersion || !releaseUrl) {
@@ -76,7 +76,12 @@ export class UpdateChecker {
         return { ok: true }
       }
 
-      const info: UpdateInfo = { version: latestVersion, releaseUrl }
+      const changelog = data.body?.trim() || undefined
+      const info: UpdateInfo = {
+        version: latestVersion,
+        releaseUrl,
+        ...(changelog ? { changelog } : {}),
+      }
       this.setState({ available: true, info })
       this.logger.info('update_available', { current: currentVersion, latest: latestVersion })
 

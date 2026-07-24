@@ -10,6 +10,7 @@ describe('UpdateChecker', () => {
         json: async () => ({
           tag_name: 'v0.2.13',
           html_url: 'https://github.com/YeEeck/celery-web-speak-desktop/releases/tag/v0.2.13',
+          body: '修复了若干问题\n优化了性能',
         }),
       })
       .mockRejectedValueOnce(new Error('offline'))
@@ -38,6 +39,7 @@ describe('UpdateChecker', () => {
       info: {
         version: '0.2.13',
         releaseUrl: 'https://github.com/YeEeck/celery-web-speak-desktop/releases/tag/v0.2.13',
+        changelog: '修复了若干问题\n优化了性能',
       },
     })
 

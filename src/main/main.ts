@@ -334,6 +334,7 @@ function showUpdateDialog(): void {
       type: 'info',
       title: '发现新版本',
       message: `当前版本 v${app.getVersion()}，最新版本 v${state.info.version}`,
+      ...(state.info.changelog ? { detail: state.info.changelog } : {}),
       buttons: ['前往下载', '跳过此版本', '稍后提醒'],
       defaultId: 0,
       cancelId: 2,

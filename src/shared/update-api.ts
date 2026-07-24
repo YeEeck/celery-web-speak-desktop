@@ -1,6 +1,7 @@
 export interface UpdateInfo {
   version: string
   releaseUrl: string
+  changelog?: string
 }
 
 export interface UpdateCheckResult {
