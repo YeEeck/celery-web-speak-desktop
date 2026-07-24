@@ -22,6 +22,11 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run package:win-dir
+      - name: 移除不需要的 DirectX 编译器 DLL
+        shell: pwsh
+        run: |
+          Remove-Item "release/win-unpacked/dxcompiler.dll" -ErrorAction Stop
+          Remove-Item "release/win-unpacked/dxil.dll" -ErrorAction Stop
       - name: 验证应用音频工作进程握手
         shell: pwsh
         run: |

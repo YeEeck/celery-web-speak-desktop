@@ -42,6 +42,7 @@
     "appId": "io.github.yeeeck.celery-web-speak",
     "productName": "Celery Web Speak",
     "asar": true,
+    "electronLanguages": ["en-US", "zh-CN"],
     "asarUnpack": [
       "dist/native/**/*.node"
     ],
