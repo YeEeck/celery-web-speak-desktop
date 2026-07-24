@@ -1,6 +1,6 @@
 {
   "name": "celery-web-speak-desktop",
-  "version": "0.2.16",
+  "version": "0.2.17",
   "description": "Electron desktop shell for Celery Web Speak",
   "author": "YeEeck",
   "license": "GPL-3.0-only",
@@ -42,7 +42,10 @@
     "appId": "io.github.yeeeck.celery-web-speak",
     "productName": "Celery Web Speak",
     "asar": true,
-    "electronLanguages": ["en-US", "zh-CN"],
+    "electronLanguages": [
+      "en-US",
+      "zh-CN"
+    ],
     "asarUnpack": [
       "dist/native/**/*.node"
     ],
