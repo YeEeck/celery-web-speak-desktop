@@ -5,6 +5,8 @@ const channels = {
   validate: 'setup:validate',
   save: 'setup:save',
   cancel: 'setup:cancel',
+  getRecentServers: 'setup:get-recent-servers',
+  removeRecentServer: 'setup:remove-recent-server',
 } as const
 
 contextBridge.exposeInMainWorld('desktopSetup', {
@@ -12,6 +14,8 @@ contextBridge.exposeInMainWorld('desktopSetup', {
   validate: (serverUrl: string) => ipcRenderer.invoke(channels.validate, serverUrl),
   save: (request: { serverUrl: string; force: boolean }) => ipcRenderer.invoke(channels.save, request),
   cancel: () => ipcRenderer.invoke(channels.cancel),
+  getRecentServers: () => ipcRenderer.invoke(channels.getRecentServers),
+  removeRecentServer: (serverUrl: string) => ipcRenderer.invoke(channels.removeRecentServer, serverUrl),
 })
 
 const windowChannels = {

@@ -156,6 +156,7 @@ function registerSetupIpc(): void {
     assertSetupSender(event.sender)
     try {
       const serverUrl = normalizeServerUrl(input?.serverUrl ?? '')
+      void store.addRecentServer(serverUrl).catch(() => {})
       if (!input?.force) {
         const validation = await validateServer(serverUrl, net.fetch)
         if (!validation.ok) return validation
@@ -176,6 +177,17 @@ function registerSetupIpc(): void {
     void store.load().then((config) => {
       if (config) showRemote(config)
     })
+  })
+
+  ipcMain.handle(SETUP_CHANNELS.getRecentServers, async (event) => {
+    assertSetupSender(event.sender)
+    return store.getRecentServers()
+  })
+
+  ipcMain.handle(SETUP_CHANNELS.removeRecentServer, async (event, serverUrl: unknown) => {
+    assertSetupSender(event.sender)
+    if (typeof serverUrl !== 'string') return []
+    return store.removeRecentServer(serverUrl)
   })
 }
 

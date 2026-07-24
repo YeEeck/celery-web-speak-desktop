@@ -17,6 +17,7 @@ export interface AppConfig {
   window: WindowState
   autoCheckUpdate: boolean
   skippedVersion: string | null
+  recentServers: string[]
 }
 
 export const DEFAULT_WINDOW_STATE: WindowState = {
@@ -86,12 +87,14 @@ export class ConfigStore {
   }
 
   async save(serverUrl: string, windowState: WindowState = DEFAULT_WINDOW_STATE): Promise<AppConfig> {
+    const current = await this.load()
     const config: AppConfig = {
       version: 1,
       serverUrl: normalizeServerUrl(serverUrl),
       window: normalizeWindowState(windowState),
       autoCheckUpdate: true,
       skippedVersion: null,
+      recentServers: current?.recentServers ?? [],
     }
     await this.write(config)
     return config
@@ -107,6 +110,28 @@ export class ConfigStore {
     const current = await this.load()
     if (!current) return
     await this.write({ ...current, ...prefs })
+  }
+
+  async addRecentServer(serverUrl: string): Promise<string[]> {
+    const current = await this.load()
+    if (!current) return []
+    const normalized = normalizeServerUrl(serverUrl)
+    const list = [normalized, ...current.recentServers.filter((u) => u !== normalized)].slice(0, 5)
+    await this.write({ ...current, recentServers: list })
+    return list
+  }
+
+  async removeRecentServer(serverUrl: string): Promise<string[]> {
+    const current = await this.load()
+    if (!current) return []
+    const list = current.recentServers.filter((u) => u !== serverUrl)
+    await this.write({ ...current, recentServers: list })
+    return list
+  }
+
+  async getRecentServers(): Promise<string[]> {
+    const current = await this.load()
+    return current?.recentServers ?? []
   }
 
   private async write(config: AppConfig): Promise<void> {
@@ -126,6 +151,9 @@ function parseConfig(value: unknown): AppConfig | null {
       window: normalizeWindowState(value.window),
       autoCheckUpdate: value.autoCheckUpdate !== false,
       skippedVersion: typeof value.skippedVersion === 'string' ? value.skippedVersion : null,
+      recentServers: Array.isArray(value.recentServers)
+        ? value.recentServers.filter((u): u is string => typeof u === 'string').slice(0, 5)
+        : [],
     }
   } catch {
     return null

@@ -6,6 +6,7 @@ const submitButton = document.querySelector('#submit-button')
 const forceButton = document.querySelector('#force-button')
 const cancelButton = document.querySelector('#cancel-button')
 const version = document.querySelector('#version')
+const recentList = document.querySelector('#recent-servers')
 
 let busy = false
 let lastFailedUrl = ''
@@ -20,6 +21,7 @@ async function initialize() {
   if (state.startupError) showStatus(state.startupError, false)
   input.focus()
   input.select()
+  void loadRecentServers()
 }
 
 form.addEventListener('submit', (event) => {
@@ -80,4 +82,43 @@ function hideStatus() {
   status.hidden = true
   status.textContent = ''
   status.classList.remove('success')
+}
+
+async function loadRecentServers() {
+  const servers = await api.getRecentServers()
+  renderRecentServers(servers)
+}
+
+function renderRecentServers(servers) {
+  recentList.innerHTML = ''
+  recentList.hidden = servers.length === 0
+  for (const url of servers) {
+    const li = document.createElement('li')
+
+    const item = document.createElement('button')
+    item.type = 'button'
+    item.className = 'recent-item'
+    item.textContent = url
+    item.title = url
+    item.addEventListener('click', () => {
+      input.value = url
+      input.focus()
+      forceButton.hidden = true
+      lastFailedUrl = ''
+      hideStatus()
+    })
+
+    const del = document.createElement('button')
+    del.type = 'button'
+    del.className = 'recent-delete'
+    del.textContent = '\u00d7'
+    del.title = '删除此记录'
+    del.addEventListener('click', async () => {
+      const updated = await api.removeRecentServer(url)
+      renderRecentServers(updated)
+    })
+
+    li.append(item, del)
+    recentList.append(li)
+  }
 }

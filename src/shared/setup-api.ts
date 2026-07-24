@@ -19,6 +19,8 @@ export interface SetupApi {
   validate(serverUrl: string): Promise<SetupResult>
   save(request: SetupSaveRequest): Promise<SetupResult>
   cancel(): Promise<void>
+  getRecentServers(): Promise<string[]>
+  removeRecentServer(serverUrl: string): Promise<string[]>
 }
 
 export const SETUP_CHANNELS = {
@@ -26,4 +28,6 @@ export const SETUP_CHANNELS = {
   validate: 'setup:validate',
   save: 'setup:save',
   cancel: 'setup:cancel',
+  getRecentServers: 'setup:get-recent-servers',
+  removeRecentServer: 'setup:remove-recent-server',
 } as const
