@@ -21,7 +21,7 @@ const HEADPHONES_OFF_ICON = `
     <path d="M20 14a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2 2 2 0 0 0 2-2z"></path>
   </svg>`
 
-window.overlayHost.getState().then(render)
+void window.overlayHost.getState().then(render)
 
 window.overlayHost.onState(render)
 
@@ -32,7 +32,6 @@ function render(state) {
   channelName.closest('.overlay-channel').hidden = emptyVisible
   empty.hidden = !emptyVisible
   participants.hidden = emptyVisible
-  if (emptyVisible) return
   renderParticipants(state.participants ?? [])
 }
 

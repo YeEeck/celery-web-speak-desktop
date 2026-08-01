@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  OVERLAY_WINDOW_CHANNELS,
   VOICE_OVERLAY_CAPABILITIES,
   VOICE_OVERLAY_CHANNELS,
   VOICE_OVERLAY_PROTOCOL,
@@ -13,11 +14,17 @@ describe('voice overlay API', () => {
     expect(VOICE_OVERLAY_CAPABILITIES).toEqual(['voice_overlay'])
   })
 
-  it('uses the agreed IPC channel names', () => {
+  it('uses the agreed bridge channel names', () => {
     expect(VOICE_OVERLAY_CHANNELS).toEqual({
       hello: 'voice-overlay:hello',
       setEnabled: 'voice-overlay:set-enabled',
       state: 'voice-overlay:state',
+    })
+  })
+
+  it('uses the local overlay window channel names', () => {
+    expect(OVERLAY_WINDOW_CHANNELS).toEqual({
+      render: 'voice-overlay:render',
       getState: 'voice-overlay:get-state',
     })
   })

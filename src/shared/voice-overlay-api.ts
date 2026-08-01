@@ -1,17 +1,26 @@
+import { normalizeProtocolRange } from './protocol-api.js'
+import type { ProtocolHello } from './protocol-api.js'
+
 export const VOICE_OVERLAY_PROTOCOL = 1
 
 export const VOICE_OVERLAY_CAPABILITIES = [
   'voice_overlay',
 ] as const
 
+// Web 页面与桌面壳之间的桥通道，与设计文档「语音浮层桥协议」的通道表一致。
 export const VOICE_OVERLAY_CHANNELS = {
   hello: 'voice-overlay:hello',
   setEnabled: 'voice-overlay:set-enabled',
   state: 'voice-overlay:state',
+} as const
+
+// 本地浮层窗口的渲染通道，不属于 Web 桥契约。
+export const OVERLAY_WINDOW_CHANNELS = {
+  render: 'voice-overlay:render',
   getState: 'voice-overlay:get-state',
 } as const
 
-export const VOICE_OVERLAY_RENDER_CHANNEL = 'voice-overlay:render'
+export type VoiceOverlayHello = ProtocolHello
 
 export interface VoiceOverlayParticipant {
   identity: string
@@ -26,11 +35,6 @@ export interface VoiceOverlayParticipant {
 export interface VoiceOverlayState {
   channel: { name: string } | null
   participants: VoiceOverlayParticipant[]
-}
-
-export interface VoiceOverlayHello {
-  protocol: number
-  capabilities: string[]
 }
 
 export function normalizeVoiceOverlayEnabledRequest(input: unknown): boolean | null {

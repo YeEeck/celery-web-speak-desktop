@@ -1,3 +1,5 @@
+import type { ProtocolHello, ProtocolRange } from './protocol-api.js'
+
 export const APPLICATION_AUDIO_PROTOCOL = 1
 export const APPLICATION_AUDIO_PCM_PORT_EVENT = 'celery:application-audio:pcm-port'
 
@@ -23,16 +25,6 @@ export const APPLICATION_AUDIO_PICKER_CHANNELS = {
   choose: 'application-audio-picker:choose',
   cancel: 'application-audio-picker:cancel',
 } as const
-
-export interface ProtocolRange {
-  minProtocol: number
-  maxProtocol: number
-}
-
-export interface ApplicationAudioHello {
-  protocol: number
-  capabilities: string[]
-}
 
 export type ApplicationAudioState =
   | 'idle'
@@ -92,7 +84,7 @@ export interface ApplicationAudioPickerSource {
 }
 
 export interface DesktopApplicationAudio {
-  hello(input: ProtocolRange): Promise<ApplicationAudioHello>
+  hello(input: ProtocolRange): Promise<ProtocolHello>
   getSnapshot(): Promise<ApplicationAudioSnapshot>
   start(): Promise<ApplicationAudioSnapshot>
   pause(sessionId: string): Promise<ApplicationAudioSnapshot>
@@ -101,19 +93,10 @@ export interface DesktopApplicationAudio {
   onSnapshot(listener: (snapshot: ApplicationAudioSnapshot) => void): () => void
 }
 
-export function normalizeProtocolRange(input: unknown): ProtocolRange | null {
-  if (!input || typeof input !== 'object') return null
-  const candidate = input as Partial<ProtocolRange>
-  if (!Number.isSafeInteger(candidate.minProtocol) || !Number.isSafeInteger(candidate.maxProtocol)) {
-    return null
-  }
-  const minProtocol = candidate.minProtocol as number
-  const maxProtocol = candidate.maxProtocol as number
-  if (minProtocol < 1 || maxProtocol < minProtocol) return null
-  return { minProtocol, maxProtocol }
-}
-
 export function isValidApplicationAudioSessionId(input: unknown): input is string {
   return typeof input === 'string'
     && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input)
 }
+
+export type { ProtocolRange, ProtocolHello } from './protocol-api.js'
+export { normalizeProtocolRange } from './protocol-api.js'

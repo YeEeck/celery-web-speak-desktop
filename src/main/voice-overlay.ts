@@ -9,30 +9,24 @@ import {
   type WebContents,
 } from 'electron'
 import {
+  OVERLAY_WINDOW_CHANNELS,
   VOICE_OVERLAY_CAPABILITIES,
   VOICE_OVERLAY_CHANNELS,
   VOICE_OVERLAY_PROTOCOL,
-  VOICE_OVERLAY_RENDER_CHANNEL,
   normalizeVoiceOverlayEnabledRequest,
   normalizeVoiceOverlayState,
   type VoiceOverlayHello,
   type VoiceOverlayState,
 } from '../shared/voice-overlay-api.js'
-import { normalizeProtocolRange } from '../shared/application-audio-api.js'
+import { normalizeProtocolRange } from '../shared/protocol-api.js'
 import { isTrustedRemoteRequest } from './remote-request-policy.js'
 import type { Logger } from './logger.js'
-import { REMOTE_PARTITION } from './windows.js'
+import { REMOTE_PARTITION, type RemoteBinding } from './windows.js'
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 const OVERLAY_WIDTH = 280
 const OVERLAY_HEIGHT = 420
 const OVERLAY_EDGE_MARGIN = 32
-
-interface RemoteBinding {
-  window: BrowserWindow
-  webContents: WebContents
-  serverUrl: string
-}
 
 const EMPTY_STATE: VoiceOverlayState = { channel: null, participants: [] }
 
@@ -51,7 +45,7 @@ export class VoiceOverlayCoordinator {
     ipcMain.on(VOICE_OVERLAY_CHANNELS.state, (event, input: unknown) => {
       this.receiveState(event, input)
     })
-    ipcMain.handle(VOICE_OVERLAY_CHANNELS.getState, (event) => {
+    ipcMain.handle(OVERLAY_WINDOW_CHANNELS.getState, (event) => {
       if (event.sender !== this.overlayWindow?.webContents) {
         throw new Error('Voice overlay state is only available to the overlay window')
       }
@@ -63,8 +57,8 @@ export class VoiceOverlayCoordinator {
     this.unbindRemote()
     const binding: RemoteBinding = { window, webContents, serverUrl }
     this.remote = binding
-    webContents.on('did-start-navigation', (_event, _url, _isInPlace, isMainFrame) => {
-      if (isMainFrame && this.remote === binding) this.clearState()
+    webContents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+      if (isMainFrame && !isInPlace && this.remote === binding) this.clearState()
     })
     webContents.on('render-process-gone', () => {
       if (this.remote === binding) this.unbindRemote()
@@ -133,7 +127,7 @@ export class VoiceOverlayCoordinator {
   private sendStateToOverlay(): void {
     const overlay = this.overlayWindow
     if (!overlay || overlay.isDestroyed() || overlay.webContents.isDestroyed()) return
-    overlay.webContents.send(VOICE_OVERLAY_RENDER_CHANNEL, this.state)
+    overlay.webContents.send(OVERLAY_WINDOW_CHANNELS.render, this.state)
   }
 
   private ensureOverlayWindow(): BrowserWindow {

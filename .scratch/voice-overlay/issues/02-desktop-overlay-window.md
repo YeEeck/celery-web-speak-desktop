@@ -10,7 +10,7 @@
 - [x] 启停消息正确创建/销毁浮层窗口，窗口属性符合设计（透明、置顶、穿透、无焦点、固定位置）
 - [x] 空态与完整状态渲染正确，说话/静音/聋变化实时更新
 - [x] 集成测试覆盖握手、快照、增量与销毁；TypeScript 类型检查与既有测试通过
-- [x] Linux X11 下浮层窗口行为正常，Windows 平台行为不回归
+- [x] Linux X11 集成测试通过（Windows 实机验收由 04 票据执行）
 
 ## Answer
 
@@ -27,5 +27,9 @@
 
 1. **渲染竞态**：状态在渲染器订阅前到达会被丢弃，浮层页启动时先 `getState()` 拉当前状态再订阅（menu 页同款模式）。
 2. **窗口尺寸固定 280x420**：无内容自适应，避免主进程查询渲染尺寸的往返。
+3. **SPA 同文档导航不清空**：`did-start-navigation` 的 in-place 导航（pushState/路由切换）不清浮层状态，只有真实导航与渲染进程退出才清空。
+4. **hello 无条件清空**：协议号合法的 hello 即清空旧状态（协议不兼容时同样清空），旧会话状态一律不保留；设计文档不变量 1 已同步措辞。
+
+评审修复清单：`getState` 移出 Web 桥通道表（本地浮层窗口通道独立为 `OVERLAY_WINDOW_CHANNELS`，协议通道表维持 3 通道不变）；`ProtocolRange`/`ProtocolHello`/`normalizeProtocolRange` 提取到共享 `protocol-api.ts`；`RemoteBinding` 提取到 windows.ts 共享；e2e 补第二次 hello 清空旧状态断言、位置断言改为按 workArea 交叉校验；票据验收项措辞与实机验证范围对齐（Windows 实机验收归 04）。
 
 全量验证：92 单测 + 3 e2e 通过，typecheck 干净。Windows 实机验收留给 04 票据。

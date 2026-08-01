@@ -19,14 +19,9 @@ import {
 import type { ApplicationAudioWorkerEvent, NativeProbeResult } from '../shared/application-audio-worker.js'
 import { ApplicationAudioPicker } from './application-audio-picker.js'
 import { isTrustedRemoteRequest } from './remote-request-policy.js'
+import type { RemoteBinding } from './windows.js'
 import { ApplicationAudioWorkerProcess } from './application-audio-worker.js'
 import type { Logger } from './logger.js'
-
-interface RemoteBinding {
-  window: BrowserWindow
-  webContents: WebContents
-  serverUrl: string
-}
 
 const ERROR_MESSAGES: Record<ApplicationAudioErrorCode, string> = {
   unsupported_platform: '当前平台不支持应用音频共享',

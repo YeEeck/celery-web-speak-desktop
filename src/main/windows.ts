@@ -30,6 +30,12 @@ export interface RemoteWindow {
   webContents: WebContents
 }
 
+export interface RemoteBinding {
+  window: BrowserWindow
+  webContents: WebContents
+  serverUrl: string
+}
+
 export function createSetupWindow(): BrowserWindow {
   const window = new BrowserWindow({
     title: 'Celery Web Speak',

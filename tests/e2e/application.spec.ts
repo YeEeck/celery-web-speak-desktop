@@ -277,9 +277,10 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
     })
     expect(overlayWindowState).toEqual({
       alwaysOnTop: true,
-      bounds: { x: 32, y: expect.any(Number), width: 280, height: 420 },
-      expected: { x: 32, y: expect.any(Number) },
+      bounds: { x: expect.any(Number), y: expect.any(Number), width: 280, height: 420 },
+      expected: { x: expect.any(Number), y: expect.any(Number) },
     })
+    expect(overlayWindowState.bounds.x).toBe(overlayWindowState.expected.x)
     expect(overlayWindowState.bounds.y).toBe(overlayWindowState.expected.y)
 
     await application.evaluate(({ webContents }, targetUrl) => {
@@ -295,6 +296,14 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
     }, serverUrl)
     await expect(overlayPage.locator('.participant.speaking')).toHaveCount(0)
     await expect(overlayPage.locator('.participant')).toHaveCount(2)
+
+    await application.evaluate(({ webContents }, targetUrl) => {
+      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))
+      if (!remote) throw new Error('remote WebContentsView was not found')
+      return remote.executeJavaScript('window.desktopVoiceOverlay.hello({ minProtocol: 1, maxProtocol: 1 })')
+    }, serverUrl)
+    await expect(overlayPage.locator('.overlay-empty')).toBeVisible()
+    await expect(overlayPage.locator('.participant')).toHaveCount(0)
 
     await application.evaluate(({ webContents }, targetUrl) => {
       const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))
