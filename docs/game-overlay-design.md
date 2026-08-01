@@ -48,7 +48,7 @@
 - `focusable: false`、`skipTaskbar: true`，不抢焦点、不占任务栏
 - 内容为打包的本地 HTML（显示频道名、成员头像/名字、说话高亮、静音/聋状态），不含远程内容、无通用 preload
 
-数据流：Web 页面经版本化 Overlay Bridge（沿用 application-audio Bridge 的 sender/顶层 frame/Origin 校验模式）把成员与说话状态增量推给 Main，Main 转发给 Overlay 窗口渲染。
+数据流：Web 页面经版本化 Overlay Bridge（沿用 application-audio Bridge 的 sender/顶层 frame/Origin 校验模式）把成员与说话状态快照推给 Main，Main 转发给 Overlay 窗口渲染。
 
 优点：
 
@@ -99,7 +99,7 @@
 
 - 协议号 `VOICE_OVERLAY_PROTOCOL = 1`。
 - 能力声明：单个能力 `voice_overlay`；握手返回缺少该能力时 Web 端视为不可用。
-- 桥入口：preload 向远程页面暴露 `window.desktopVoiceOverlay`；浏览器环境无该入口，Web 端应隐藏开关。
+- 桥入口：preload 向远程页面暴露 `window.desktopVoiceOverlay`；浏览器环境无该入口，Web 端应隐藏开关。握手失败（协议号不匹配、能力缺失或调用异常）与无入口同等对待：视为不可用，开关隐藏。
 
 ### 消息
 
@@ -120,7 +120,7 @@ interface VoiceOverlayState {
 interface VoiceOverlayParticipant {
   identity: string          // LiveKit identity，参与者唯一键
   name: string              // 显示名
-  avatarUrl: string | null  // 服务器头像资源；浮层窗口直接以 <img> 加载
+  avatarUrl: string | null  // 头像资源（服务器 URL）；浮层窗口直接以 <img> 加载
   isLocal: boolean          // 是否本人
   speaking: boolean         // 说话状态
   microphoneMuted: boolean  // 麦克风静音
@@ -133,8 +133,9 @@ interface VoiceOverlayParticipant {
 1. Web 页面每次加载或桥重连后，必须先 `hello`；hello 成功后壳层丢弃此前全部浮层状态，等待新快照。Web 随后至少推送一次全量快照（真实状态或空态）。
 2. `setEnabled` 决定浮层窗口存在与否；页面重载、切换服务器后，Web 以持久化偏好重发 `setEnabled`，壳层以最新消息为准。
 3. `state` 是幂等全量快照，不设计增量协议，也不携带 revision——一致性由 hello 收敛边界与单 renderer IPC 有序性保证。
-4. 节流：说话切换等高频变化由 Web 端合并到 100ms 窗口内推送最新全量快照；成员进出、静音/聋变化、频道切换即时推送。任意时刻推送间隔不小于 100ms。
+4. 节流：说话切换等高频变化由 Web 端合并到 100ms 窗口内推送最新全量快照（窗口内多次变化只推一次）；成员进出、静音/聋变化、频道切换等低频变化即时推送，不受节流约束。
 5. 退出语音立即推送空态（`channel: null`、`participants: []`）；关闭开关推送 `setEnabled(false)` 并停止推送。
+6. 壳层在远程页面主 frame 导航或渲染进程退出时清空浮层状态，浮层窗口保留，等待下一次 hello 与快照。
 
 ### 安全
 
@@ -148,7 +149,7 @@ interface VoiceOverlayParticipant {
 ## 工作量估算
 
 - 桌面壳：Overlay 窗口管理、IPC 转发、热键、配置持久化、测试——与 application-audio 体量相当或略低（无原生模块、无 utilityProcess）。
-- Web 端：Overlay Bridge 模块订阅 voice store 推送增量——小。
+- Web 端：Overlay Bridge 模块订阅 voice store 推送快照——小。
 - 集成测试：Linux 可在 X11 下跑窗口创建与 IPC 校验；Windows 独占全屏限制靠文档约束。
 
 ## 结论
