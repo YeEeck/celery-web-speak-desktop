@@ -91,6 +91,60 @@
 
 浮层开启后对其他窗口（非游戏）也可见，不做目标窗口焦点检测——与"无热键、常驻"约束一致。
 
+## 语音浮层桥协议
+
+> 协议定稿：2026-08-01。桌面壳与 Web 页面两仓实现均以本章节为唯一契约，不得自行解释；实现时两仓代码中的协议常量必须与此一致。
+
+### 通道与版本
+
+- 协议号 `VOICE_OVERLAY_PROTOCOL = 1`。
+- 能力声明：单个能力 `voice_overlay`；握手返回缺少该能力时 Web 端视为不可用。
+- 桥入口：preload 向远程页面暴露 `window.desktopVoiceOverlay`；浏览器环境无该入口，Web 端应隐藏开关。
+
+### 消息
+
+| 方向 | 通道 | 语义 |
+| --- | --- | --- |
+| Web → Shell | `voice-overlay:hello`（invoke） | 握手：入参 `{minProtocol, maxProtocol}`，返回 `{protocol, capabilities}`；协议号不匹配或能力缺失视为不可用 |
+| Web → Shell | `voice-overlay:set-enabled`（invoke） | 启停：入参 `{enabled: boolean}`；壳层据此创建/销毁浮层窗口 |
+| Web → Shell | `voice-overlay:state`（单向推送） | 全量状态快照 `VoiceOverlayState` |
+
+### 类型形状
+
+```ts
+interface VoiceOverlayState {
+  channel: { name: string } | null   // null 表示未连接语音（空态）
+  participants: VoiceOverlayParticipant[]
+}
+
+interface VoiceOverlayParticipant {
+  identity: string          // LiveKit identity，参与者唯一键
+  name: string              // 显示名
+  avatarUrl: string | null  // 服务器头像资源；浮层窗口直接以 <img> 加载
+  isLocal: boolean          // 是否本人
+  speaking: boolean         // 说话状态
+  microphoneMuted: boolean  // 麦克风静音
+  deafened: boolean         // 聋
+}
+```
+
+### 会话收敛规则（协议不变量）
+
+1. Web 页面每次加载或桥重连后，必须先 `hello`；hello 成功后壳层丢弃此前全部浮层状态，等待新快照。Web 随后至少推送一次全量快照（真实状态或空态）。
+2. `setEnabled` 决定浮层窗口存在与否；页面重载、切换服务器后，Web 以持久化偏好重发 `setEnabled`，壳层以最新消息为准。
+3. `state` 是幂等全量快照，不设计增量协议，也不携带 revision——一致性由 hello 收敛边界与单 renderer IPC 有序性保证。
+4. 节流：说话切换等高频变化由 Web 端合并到 100ms 窗口内推送最新全量快照；成员进出、静音/聋变化、频道切换即时推送。任意时刻推送间隔不小于 100ms。
+5. 退出语音立即推送空态（`channel: null`、`participants: []`）；关闭开关推送 `setEnabled(false)` 并停止推送。
+
+### 安全
+
+三个通道均执行与 application-audio 相同的信任校验：sender 必须为当前远程窗口的 webContents、顶层 frame、URL Origin 与当前服务器 Origin 一致。校验失败：`hello`/`setEnabled` 拒绝（invoke 抛错），`state` 丢弃并记日志。
+
+### 实现注记
+
+- 浮层窗口加载头像资源时使用与远程窗口相同的持久分区，共享会话 Cookie；纯 `<img>` 加载不需要 CORS。
+- 浮层窗口内容为本地打包页面，不加载远程 HTML，不暴露通用 preload。
+
 ## 工作量估算
 
 - 桌面壳：Overlay 窗口管理、IPC 转发、热键、配置持久化、测试——与 application-audio 体量相当或略低（无原生模块、无 utilityProcess）。
