@@ -4,7 +4,7 @@
 
 **Blocked by:** 05 — 桌面壳协议 2：配置通道、几何应用与远程浮层页
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] 配置模型带默认值，读写 localStorage 持久化
 - [ ] 协议 2 时推送 `set-config`，节流 50ms 合并高频变化

@@ -4,7 +4,7 @@
 
 **Blocked by:** 06 — Web 端浮层配置：模型、存储与推送
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] "语音浮层"页在协议 2 时显示、无桥/协议 1 时隐藏
 - [ ] 开关与语音操作区按钮双向同步

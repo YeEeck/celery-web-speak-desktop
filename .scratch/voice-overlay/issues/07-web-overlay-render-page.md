@@ -4,7 +4,7 @@
 
 **Blocked by:** 05 — 桌面壳协议 2：配置通道、几何应用与远程浮层页
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] 独立入口构建成功，部署路径可访问
 - [ ] 快照渲染：行块、头像、名字、静音/聋图标与 Web UI 一致

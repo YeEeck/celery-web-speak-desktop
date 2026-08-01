@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — 桌面端浮层窗口与桥接收；03 — Web 端开关与状态推送
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] hello 协商返回协议 2；协议 1 请求（1-1）返回 1 且浮层禁用
 - [ ] `set-config` 通道接收并校验配置，非法值 clamp 或拒绝
