@@ -223,10 +223,20 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
     await expect(page.getByRole('button', { name: '打开应用菜单' })).toBeVisible()
     await expect.poll(() => remoteText(application, serverUrl, 'h1')).toBe('HTTP voice test')
 
-    const overlayBridgeState = await application.evaluate(async ({ webContents }, targetUrl) => {
-      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl) && !contents.getURL().endsWith('/overlay.html'))
+    const overlayBridgeState = await application.evaluate(async ({ webContents }, input) => {
+      const remote = webContents.getAllWebContents().find((contents) => (
+        contents.getURL().startsWith(input.url) && !contents.getURL().endsWith('/overlay.html')
+      ))
       if (!remote) throw new Error('remote WebContentsView was not found')
-      const topBridge = await remote.executeJavaScript(`(async () => {
+      const topBridge = await remote.executeJavaScript(input.hello)
+      const childBridge = await remote.executeJavaScript(`(() => {
+        const frame = document.querySelector('iframe')
+        return frame?.contentWindow ? typeof frame.contentWindow.desktopVoiceOverlay : null
+      })()`)
+      return { topBridge, childBridge }
+    }, {
+      url: serverUrl,
+      hello: `(async () => {
         const hello = await window.desktopVoiceOverlay.hello({ minProtocol: 1, maxProtocol: 2 })
         await window.desktopVoiceOverlay.setEnabled(true)
         window.desktopVoiceOverlay.pushState({
@@ -238,13 +248,8 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
           ],
         })
         return hello
-      })()`)
-      const childBridge = await remote.executeJavaScript(`(() => {
-        const frame = document.querySelector('iframe')
-        return frame?.contentWindow ? typeof frame.contentWindow.desktopVoiceOverlay : null
-      })()`)
-      return { topBridge, childBridge }
-    }, serverUrl)
+      })()`,
+    })
     expect(overlayBridgeState.topBridge).toEqual({ protocol: 2, capabilities: ['voice_overlay'] })
     expect(overlayBridgeState.childBridge).toBe('undefined')
     const overlayPage = await overlayWindow(application, serverUrl)
@@ -285,17 +290,13 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
 
     await expect(overlayPage.locator('#config-output')).toContainText('100')
 
-    await application.evaluate(({ webContents }, targetUrl) => {
-      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl) && !contents.getURL().endsWith('/overlay.html'))
-      if (!remote) throw new Error('remote WebContentsView was not found')
-      return remote.executeJavaScript(`window.desktopVoiceOverlay.setConfig({
-        scalePercent: 150,
-        positionXPercent: 50,
-        positionYPercent: 25,
-        speakingOpacityPercent: 90,
-        silentOpacityPercent: 20,
-      })`)
-    }, serverUrl)
+    await remoteEvaluate(application, serverUrl, `window.desktopVoiceOverlay.setConfig({
+      scalePercent: 150,
+      positionXPercent: 50,
+      positionYPercent: 25,
+      speakingOpacityPercent: 90,
+      silentOpacityPercent: 20,
+    })`)
     const overlayScaledState = await application.evaluate(({ BrowserWindow, screen }) => {
       const overlay = BrowserWindow.getAllWindows().find((window) => (
         window.webContents.getURL().endsWith('/overlay.html')
@@ -319,56 +320,61 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
     expect(overlayScaledState.bounds.y).toBe(overlayScaledState.expected.y)
     await expect(overlayPage.locator('#config-output')).toContainText('150')
 
-    await application.evaluate(({ webContents }, targetUrl) => {
-      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl) && !contents.getURL().endsWith('/overlay.html'))
-      if (!remote) throw new Error('remote WebContentsView was not found')
-      return remote.executeJavaScript(`window.desktopVoiceOverlay.pushState({
-        channel: { name: '大厅' },
-        participants: [
-          { identity: 'u1', name: '张三', avatarUrl: null, isLocal: true, speaking: false, microphoneMuted: false, deafened: false },
-          { identity: 'u2', name: 'alice', avatarUrl: null, isLocal: false, speaking: false, microphoneMuted: true, deafened: false },
-        ],
-      })`)
-    }, serverUrl)
+    await remoteEvaluate(application, serverUrl, `window.desktopVoiceOverlay.pushState({
+      channel: { name: '大厅' },
+      participants: [
+        { identity: 'u1', name: '张三', avatarUrl: null, isLocal: true, speaking: false, microphoneMuted: false, deafened: false },
+        { identity: 'u2', name: 'alice', avatarUrl: null, isLocal: false, speaking: false, microphoneMuted: true, deafened: false },
+      ],
+    })`)
     await expect(overlayPage.locator('.participant.speaking')).toHaveCount(0)
     await expect(overlayPage.locator('.participant')).toHaveCount(2)
     await expect(overlayPage.locator('.participant:has-text("alice") .participant-avatar')).toHaveText('A')
-    await expect.poll(async () => (
-      application.evaluate(({ BrowserWindow }) => {
-        const overlay = BrowserWindow.getAllWindows().find((window) => (
-          window.webContents.getURL().endsWith('/overlay.html')
-        ))
-        return overlay ? overlay.getBounds().height : null
-      })
-    )).toBe(108)
+    await expect.poll(() => overlayWindowHeight(application)).toBe(108)
 
-    const protocolOneHello = await application.evaluate(({ webContents }, targetUrl) => {
-      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl) && !contents.getURL().endsWith('/overlay.html'))
-      if (!remote) throw new Error('remote WebContentsView was not found')
-      return remote.executeJavaScript(`(async () => {
-        const hello = await window.desktopVoiceOverlay.hello({ minProtocol: 1, maxProtocol: 1 })
-        return hello
-      })()`)
-    }, serverUrl)
+    const protocolOneHello = await remoteEvaluate(application, serverUrl, `(async () => {
+      const hello = await window.desktopVoiceOverlay.hello({ minProtocol: 1, maxProtocol: 1 })
+      return hello
+    })()`)
     expect(protocolOneHello).toEqual({ protocol: 1, capabilities: ['voice_overlay'] })
-    await expect(overlayPage.locator('.participant')).toHaveCount(0)
-    await expect(overlayPage.locator('body')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    await expect.poll(() => overlayWindowExists(application)).toBe(false)
 
-    await application.evaluate(({ webContents }, targetUrl) => {
-      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl) && !contents.getURL().endsWith('/overlay.html'))
-      if (!remote) throw new Error('remote WebContentsView was not found')
-      return remote.executeJavaScript('window.desktopVoiceOverlay.setEnabled(true)')
-    }, serverUrl)
-    await expect.poll(() => (
-      application.evaluate(({ BrowserWindow }) => (
-        BrowserWindow.getAllWindows().some((window) => window.webContents.getURL().endsWith('/overlay.html'))
-      ))
-    )).toBe(false)
+    await remoteEvaluate(application, serverUrl, 'window.desktopVoiceOverlay.setEnabled(true)')
+    await expect.poll(() => overlayWindowExists(application)).toBe(false)
   } finally {
     await application.close()
     await closeServer(server)
   }
 })
+
+async function remoteEvaluate(
+  application: ElectronApplication,
+  serverUrl: string,
+  script: string,
+): Promise<unknown> {
+  return application.evaluate(async ({ webContents }, input) => {
+    const remote = webContents.getAllWebContents().find((contents) => (
+      contents.getURL().startsWith(input.url) && !contents.getURL().endsWith('/overlay.html')
+    ))
+    if (!remote) throw new Error('remote WebContentsView was not found')
+    return remote.executeJavaScript(input.script)
+  }, { url: serverUrl, script })
+}
+
+async function overlayWindowExists(application: ElectronApplication): Promise<boolean> {
+  return application.evaluate(({ BrowserWindow }) => (
+    BrowserWindow.getAllWindows().some((window) => window.webContents.getURL().endsWith('/overlay.html'))
+  ))
+}
+
+async function overlayWindowHeight(application: ElectronApplication): Promise<number | null> {
+  return application.evaluate(({ BrowserWindow }) => {
+    const overlay = BrowserWindow.getAllWindows().find((window) => (
+      window.webContents.getURL().endsWith('/overlay.html')
+    ))
+    return overlay ? overlay.getBounds().height : null
+  })
+}
 
 async function launch(userData: string, extraEnv: Record<string, string> = {}): Promise<ElectronApplication> {
   const environment = { ...process.env }

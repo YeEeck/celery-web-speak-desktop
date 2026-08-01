@@ -93,6 +93,11 @@ export class VoiceOverlayCoordinator {
     this.clearState()
     this.negotiatedProtocol = negotiateOverlayProtocol(range)
     const compatible = this.negotiatedProtocol > 0
+    if (!compatible || this.negotiatedProtocol < VOICE_OVERLAY_PROTOCOL) {
+      // 协议 1（或不可兼容）视为浮层整体禁用：销毁窗口，旧 Web 的后续
+      // setEnabled/state/config 均不再生效。
+      this.destroyOverlayWindow()
+    }
     return {
       protocol: this.negotiatedProtocol,
       capabilities: compatible ? [...VOICE_OVERLAY_CAPABILITIES] : [],
@@ -118,6 +123,7 @@ export class VoiceOverlayCoordinator {
   }
 
   private receiveState(event: IpcMainEvent, input: unknown): void {
+    if (this.negotiatedProtocol < VOICE_OVERLAY_PROTOCOL) return
     if (!this.isTrusted(event)) {
       this.logger.warn('voice_overlay_untrusted_state_dropped')
       return
@@ -133,6 +139,7 @@ export class VoiceOverlayCoordinator {
   }
 
   private receiveConfig(event: IpcMainEvent, input: unknown): void {
+    if (this.negotiatedProtocol < VOICE_OVERLAY_PROTOCOL) return
     if (!this.isTrusted(event)) {
       this.logger.warn('voice_overlay_untrusted_config_dropped')
       return
