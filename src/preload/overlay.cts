@@ -2,18 +2,27 @@ const { contextBridge, ipcRenderer } = require('electron') as typeof import('ele
 
 const renderChannel = 'voice-overlay:render'
 const getStateChannel = 'voice-overlay:get-state'
-const listeners = new Set<(state: unknown) => void>()
+const pushConfigChannel = 'voice-overlay:push-config'
+const stateListeners = new Set<(state: unknown) => void>()
+const configListeners = new Set<(config: unknown) => void>()
 
 ipcRenderer.on(renderChannel, (_event, state: unknown) => {
-  for (const listener of listeners) listener(state)
+  for (const listener of stateListeners) listener(state)
 })
+
+ipcRenderer.on(pushConfigChannel, (_event, config: unknown) => {
+  for (const listener of configListeners) listener(config)
+})
+
+function subscribe(listeners: Set<(value: unknown) => void>, listener: unknown): () => void {
+  if (typeof listener !== 'function') throw new TypeError('Overlay listener must be a function')
+  const safeListener = listener as (value: unknown) => void
+  listeners.add(safeListener)
+  return () => listeners.delete(safeListener)
+}
 
 contextBridge.exposeInMainWorld('overlayHost', {
   getState: () => ipcRenderer.invoke(getStateChannel),
-  onState: (listener: unknown) => {
-    if (typeof listener !== 'function') throw new TypeError('Overlay state listener must be a function')
-    const safeListener = listener as (state: unknown) => void
-    listeners.add(safeListener)
-    return () => listeners.delete(safeListener)
-  },
+  onState: (listener: unknown) => subscribe(stateListeners, listener),
+  onConfig: (listener: unknown) => subscribe(configListeners, listener),
 })

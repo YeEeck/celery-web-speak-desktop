@@ -128,6 +128,7 @@ const voiceOverlayChannels = {
   hello: 'voice-overlay:hello',
   setEnabled: 'voice-overlay:set-enabled',
   state: 'voice-overlay:state',
+  setConfig: 'voice-overlay:set-config',
 } as const
 
 const voiceOverlayBridge = Object.freeze({
@@ -137,6 +138,9 @@ const voiceOverlayBridge = Object.freeze({
   ),
   pushState: (state: unknown) => {
     ipcRenderer.send(voiceOverlayChannels.state, state)
+  },
+  setConfig: (config: unknown) => {
+    ipcRenderer.send(voiceOverlayChannels.setConfig, config)
   },
 })
 

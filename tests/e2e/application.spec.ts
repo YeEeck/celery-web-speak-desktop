@@ -154,7 +154,7 @@ test('当前 HTTP Origin 是安全上下文并自动取得麦克风', async () =
 
     await expect.poll(() => remoteText(application, serverUrl, 'h1')).toBe('HTTP voice test')
     const remoteState = await application.evaluate(async ({ webContents }, targetUrl) => {
-      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))
+      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl) && !contents.getURL().endsWith('/overlay.html'))
       if (!remote) throw new Error('remote WebContentsView was not found')
       const windowBridge = await remote.executeJavaScript('typeof window.desktopWindow')
       const applicationAudio = await remote.executeJavaScript(`(async () => {
@@ -224,10 +224,10 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
     await expect.poll(() => remoteText(application, serverUrl, 'h1')).toBe('HTTP voice test')
 
     const overlayBridgeState = await application.evaluate(async ({ webContents }, targetUrl) => {
-      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))
+      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl) && !contents.getURL().endsWith('/overlay.html'))
       if (!remote) throw new Error('remote WebContentsView was not found')
       const topBridge = await remote.executeJavaScript(`(async () => {
-        const hello = await window.desktopVoiceOverlay.hello({ minProtocol: 1, maxProtocol: 1 })
+        const hello = await window.desktopVoiceOverlay.hello({ minProtocol: 1, maxProtocol: 2 })
         await window.desktopVoiceOverlay.setEnabled(true)
         window.desktopVoiceOverlay.pushState({
           channel: { name: '大厅' },
@@ -245,10 +245,9 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
       })()`)
       return { topBridge, childBridge }
     }, serverUrl)
-    expect(overlayBridgeState.topBridge).toEqual({ protocol: 1, capabilities: ['voice_overlay'] })
+    expect(overlayBridgeState.topBridge).toEqual({ protocol: 2, capabilities: ['voice_overlay'] })
     expect(overlayBridgeState.childBridge).toBe('undefined')
-
-    const overlayPage = await localWindow(application, 'overlay.html')
+    const overlayPage = await overlayWindow(application, serverUrl)
     await expect(overlayPage.locator('.participant')).toHaveCount(3)
     await expect(overlayPage.getByText('张三（你）')).toBeVisible()
     await expect(overlayPage.getByText('李四')).toBeVisible()
@@ -262,7 +261,7 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
 
     const overlayWindowState = await application.evaluate(({ BrowserWindow, screen }) => {
       const overlay = BrowserWindow.getAllWindows().find((window) => (
-        window.webContents.getURL().endsWith('overlay.html')
+        window.webContents.getURL().endsWith('/overlay.html')
       ))
       if (!overlay) return null
       const bounds = overlay.getBounds()
@@ -271,21 +270,57 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
         alwaysOnTop: overlay.isAlwaysOnTop(),
         bounds: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
         expected: {
-          x: workArea.x + 32,
-          y: workArea.y + Math.round((workArea.height - 300) / 2),
+          x: workArea.x + Math.round(workArea.width * 0.09) - 140,
+          y: workArea.y + Math.round(workArea.height * 0.5) - 54,
         },
       }
     })
     expect(overlayWindowState).toEqual({
       alwaysOnTop: true,
-      bounds: { x: expect.any(Number), y: expect.any(Number), width: 280, height: 300 },
+      bounds: { x: expect.any(Number), y: expect.any(Number), width: 280, height: 108 },
       expected: { x: expect.any(Number), y: expect.any(Number) },
     })
     expect(overlayWindowState.bounds.x).toBe(overlayWindowState.expected.x)
     expect(overlayWindowState.bounds.y).toBe(overlayWindowState.expected.y)
 
+    await expect(overlayPage.locator('#config-output')).toContainText('100')
+
     await application.evaluate(({ webContents }, targetUrl) => {
-      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))
+      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl) && !contents.getURL().endsWith('/overlay.html'))
+      if (!remote) throw new Error('remote WebContentsView was not found')
+      return remote.executeJavaScript(`window.desktopVoiceOverlay.setConfig({
+        scalePercent: 150,
+        positionXPercent: 50,
+        positionYPercent: 25,
+        speakingOpacityPercent: 90,
+        silentOpacityPercent: 20,
+      })`)
+    }, serverUrl)
+    const overlayScaledState = await application.evaluate(({ BrowserWindow, screen }) => {
+      const overlay = BrowserWindow.getAllWindows().find((window) => (
+        window.webContents.getURL().endsWith('/overlay.html')
+      ))
+      if (!overlay) return null
+      const bounds = overlay.getBounds()
+      const workArea = screen.getPrimaryDisplay().workArea
+      return {
+        bounds: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
+        expected: {
+          x: workArea.x + Math.round(workArea.width * 0.5) - 210,
+          y: workArea.y + Math.round(workArea.height * 0.25) - 81,
+        },
+      }
+    })
+    expect(overlayScaledState).toEqual({
+      bounds: { x: expect.any(Number), y: expect.any(Number), width: 420, height: 162 },
+      expected: { x: expect.any(Number), y: expect.any(Number) },
+    })
+    expect(overlayScaledState.bounds.x).toBe(overlayScaledState.expected.x)
+    expect(overlayScaledState.bounds.y).toBe(overlayScaledState.expected.y)
+    await expect(overlayPage.locator('#config-output')).toContainText('150')
+
+    await application.evaluate(({ webContents }, targetUrl) => {
+      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl) && !contents.getURL().endsWith('/overlay.html'))
       if (!remote) throw new Error('remote WebContentsView was not found')
       return remote.executeJavaScript(`window.desktopVoiceOverlay.pushState({
         channel: { name: '大厅' },
@@ -298,29 +333,36 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
     await expect(overlayPage.locator('.participant.speaking')).toHaveCount(0)
     await expect(overlayPage.locator('.participant')).toHaveCount(2)
     await expect(overlayPage.locator('.participant:has-text("alice") .participant-avatar')).toHaveText('A')
+    await expect.poll(async () => (
+      application.evaluate(({ BrowserWindow }) => {
+        const overlay = BrowserWindow.getAllWindows().find((window) => (
+          window.webContents.getURL().endsWith('/overlay.html')
+        ))
+        return overlay ? overlay.getBounds().height : null
+      })
+    )).toBe(108)
 
-    await application.evaluate(({ webContents }, targetUrl) => {
-      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))
+    const protocolOneHello = await application.evaluate(({ webContents }, targetUrl) => {
+      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl) && !contents.getURL().endsWith('/overlay.html'))
       if (!remote) throw new Error('remote WebContentsView was not found')
-      return remote.executeJavaScript('window.desktopVoiceOverlay.hello({ minProtocol: 1, maxProtocol: 1 })')
+      return remote.executeJavaScript(`(async () => {
+        const hello = await window.desktopVoiceOverlay.hello({ minProtocol: 1, maxProtocol: 1 })
+        return hello
+      })()`)
     }, serverUrl)
+    expect(protocolOneHello).toEqual({ protocol: 1, capabilities: ['voice_overlay'] })
     await expect(overlayPage.locator('.participant')).toHaveCount(0)
     await expect(overlayPage.locator('body')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
 
     await application.evaluate(({ webContents }, targetUrl) => {
-      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))
+      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl) && !contents.getURL().endsWith('/overlay.html'))
       if (!remote) throw new Error('remote WebContentsView was not found')
-      return remote.executeJavaScript(`window.desktopVoiceOverlay.pushState({ channel: null, participants: [] })`)
-    }, serverUrl)
-    await expect(overlayPage.locator('.participant')).toHaveCount(0)
-
-    await application.evaluate(({ webContents }, targetUrl) => {
-      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))
-      if (!remote) throw new Error('remote WebContentsView was not found')
-      return remote.executeJavaScript('window.desktopVoiceOverlay.setEnabled(false)')
+      return remote.executeJavaScript('window.desktopVoiceOverlay.setEnabled(true)')
     }, serverUrl)
     await expect.poll(() => (
-      application.windows().some((candidate) => isLocalDocument(candidate, 'overlay.html'))
+      application.evaluate(({ BrowserWindow }) => (
+        BrowserWindow.getAllWindows().some((window) => window.webContents.getURL().endsWith('/overlay.html'))
+      ))
     )).toBe(false)
   } finally {
     await application.close()
@@ -359,6 +401,21 @@ function isLocalDocument(page: Page, documentName: string): boolean {
   }
 }
 
+async function overlayWindow(application: ElectronApplication, serverUrl: string): Promise<Page> {
+  let matchedPage: Page | undefined
+  await expect.poll(() => {
+    matchedPage = application.windows().find((page) => {
+      try {
+        return page.url().startsWith(serverUrl) && new URL(page.url()).pathname.endsWith('/overlay.html')
+      } catch {
+        return false
+      }
+    })
+    return matchedPage !== undefined
+  }, { message: '等待浮层窗口' }).toBe(true)
+  return matchedPage as Page
+}
+
 async function remoteText(application: ElectronApplication, url: string, selector: string): Promise<string | null> {
   return application.evaluate(async ({ webContents }, input) => {
     const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(input.url))
@@ -368,6 +425,64 @@ async function remoteText(application: ElectronApplication, url: string, selecto
 }
 
 async function startMediaServer(): Promise<Server> {
+  const overlayPage = `<!doctype html>
+    <html lang="zh-CN">
+      <head>
+        <meta charset="utf-8">
+        <style>
+          .participant { min-height: 36px; padding: 4px 8px; border-radius: 6px; background: rgba(17, 18, 20, 0.82); }
+          .participant.speaking { opacity: 0.8; }
+          .participant:not(.speaking) { opacity: 0.4; }
+          .participant-avatar { display: inline-block; width: 26px; height: 26px; background: #fff; }
+          .participant-avatar img { width: 100%; height: 100%; }
+        </style>
+      </head>
+      <body>
+        <ul id="participants"></ul>
+        <output id="config-output"></output>
+        <script>
+          const list = document.querySelector('#participants')
+          const configOutput = document.querySelector('#config-output')
+          function renderState(state) {
+            const items = state.participants ?? []
+            list.replaceChildren(...items.map((participant) => {
+              const row = document.createElement('li')
+              row.className = 'participant' + (participant.speaking ? ' speaking' : '')
+              const avatar = document.createElement('span')
+              avatar.className = 'participant-avatar'
+              avatar.textContent = participant.avatarUrl
+                ? 'img'
+                : (Array.from(participant.name.trim())[0]?.toUpperCase() || '?')
+              const name = document.createElement('span')
+              name.className = 'participant-name'
+              name.textContent = participant.name + (participant.isLocal ? '（你）' : '')
+              row.append(avatar, name)
+              if (participant.deafened) {
+                const icon = document.createElement('span')
+                icon.className = 'participant-icon deafened'
+                icon.textContent = 'D'
+                row.append(icon)
+              } else if (participant.microphoneMuted) {
+                const icon = document.createElement('span')
+                icon.className = 'participant-icon'
+                icon.textContent = 'M'
+                row.append(icon)
+              }
+              return row
+            }))
+          }
+          function renderConfig(config) {
+            configOutput.textContent = JSON.stringify(config)
+          }
+          window.overlayHost.getState().then((result) => {
+            renderState(result.state)
+            renderConfig(result.config)
+          })
+          window.overlayHost.onState(renderState)
+          window.overlayHost.onConfig(renderConfig)
+        </script>
+      </body>
+    </html>`
   const server = createServer((request, response) => {
     response.writeHead(200, {
       'Content-Type': 'text/html; charset=utf-8',
@@ -375,6 +490,10 @@ async function startMediaServer(): Promise<Server> {
     })
     if (request.url === '/frame') {
       response.end('<!doctype html><html><body><p>child frame</p></body></html>')
+      return
+    }
+    if (request.url === '/overlay.html') {
+      response.end(overlayPage)
       return
     }
     response.end(`<!doctype html>

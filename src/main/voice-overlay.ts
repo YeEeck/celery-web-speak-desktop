@@ -9,24 +9,26 @@ import {
   type WebContents,
 } from 'electron'
 import {
+  DEFAULT_VOICE_OVERLAY_CONFIG,
   OVERLAY_WINDOW_CHANNELS,
   VOICE_OVERLAY_CAPABILITIES,
   VOICE_OVERLAY_CHANNELS,
   VOICE_OVERLAY_PROTOCOL,
+  negotiateOverlayProtocol,
+  normalizeVoiceOverlayConfig,
   normalizeVoiceOverlayEnabledRequest,
   normalizeVoiceOverlayState,
+  type VoiceOverlayConfig,
   type VoiceOverlayHello,
   type VoiceOverlayState,
 } from '../shared/voice-overlay-api.js'
 import { normalizeProtocolRange } from '../shared/protocol-api.js'
 import { isTrustedRemoteRequest } from './remote-request-policy.js'
+import { computeOverlayBounds } from './overlay-geometry.js'
 import type { Logger } from './logger.js'
 import { REMOTE_PARTITION, type RemoteBinding } from './windows.js'
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
-const OVERLAY_WIDTH = 280
-const OVERLAY_HEIGHT = 300
-const OVERLAY_EDGE_MARGIN = 32
 
 const EMPTY_STATE: VoiceOverlayState = { channel: null, participants: [] }
 
@@ -34,6 +36,8 @@ export class VoiceOverlayCoordinator {
   private remote: RemoteBinding | null = null
   private overlayWindow: BrowserWindow | null = null
   private state: VoiceOverlayState = EMPTY_STATE
+  private config: VoiceOverlayConfig = DEFAULT_VOICE_OVERLAY_CONFIG
+  private negotiatedProtocol = 0
 
   constructor(private readonly logger: Logger) {
     ipcMain.handle(VOICE_OVERLAY_CHANNELS.hello, (event, input: unknown) => (
@@ -45,11 +49,14 @@ export class VoiceOverlayCoordinator {
     ipcMain.on(VOICE_OVERLAY_CHANNELS.state, (event, input: unknown) => {
       this.receiveState(event, input)
     })
+    ipcMain.on(VOICE_OVERLAY_CHANNELS.setConfig, (event, input: unknown) => {
+      this.receiveConfig(event, input)
+    })
     ipcMain.handle(OVERLAY_WINDOW_CHANNELS.getState, (event) => {
       if (event.sender !== this.overlayWindow?.webContents) {
         throw new Error('Voice overlay state is only available to the overlay window')
       }
-      return this.state
+      return { state: this.state, config: this.config }
     })
   }
 
@@ -84,16 +91,21 @@ export class VoiceOverlayCoordinator {
     const range = normalizeProtocolRange(input)
     if (!range) throw new Error('Invalid voice overlay protocol range')
     this.clearState()
-    const compatible = range.minProtocol <= VOICE_OVERLAY_PROTOCOL &&
-      range.maxProtocol >= VOICE_OVERLAY_PROTOCOL
+    this.negotiatedProtocol = negotiateOverlayProtocol(range)
+    const compatible = this.negotiatedProtocol > 0
     return {
-      protocol: VOICE_OVERLAY_PROTOCOL,
+      protocol: this.negotiatedProtocol,
       capabilities: compatible ? [...VOICE_OVERLAY_CAPABILITIES] : [],
     }
   }
 
   private setEnabled(event: IpcMainInvokeEvent, input: unknown): void {
     this.assertTrusted(event)
+    if (this.negotiatedProtocol < VOICE_OVERLAY_PROTOCOL) {
+      this.logger.info('voice_overlay_protocol_1_disabled')
+      this.destroyOverlayWindow()
+      return
+    }
     const enabled = normalizeVoiceOverlayEnabledRequest(input)
     if (enabled === null) throw new Error('Invalid voice overlay enabled request')
     if (enabled) {
@@ -117,11 +129,28 @@ export class VoiceOverlayCoordinator {
     }
     this.state = state
     this.sendStateToOverlay()
+    this.updateOverlayGeometry()
+  }
+
+  private receiveConfig(event: IpcMainEvent, input: unknown): void {
+    if (!this.isTrusted(event)) {
+      this.logger.warn('voice_overlay_untrusted_config_dropped')
+      return
+    }
+    const config = normalizeVoiceOverlayConfig(input)
+    if (!config) {
+      this.logger.warn('voice_overlay_invalid_config_dropped')
+      return
+    }
+    this.config = config
+    this.updateOverlayGeometry()
+    this.sendConfigToOverlay()
   }
 
   private clearState(): void {
     this.state = EMPTY_STATE
     this.sendStateToOverlay()
+    this.updateOverlayGeometry()
   }
 
   private sendStateToOverlay(): void {
@@ -130,25 +159,42 @@ export class VoiceOverlayCoordinator {
     overlay.webContents.send(OVERLAY_WINDOW_CHANNELS.render, this.state)
   }
 
+  private sendConfigToOverlay(): void {
+    const overlay = this.overlayWindow
+    if (!overlay || overlay.isDestroyed() || overlay.webContents.isDestroyed()) return
+    overlay.webContents.send(OVERLAY_WINDOW_CHANNELS.pushConfig, this.config)
+  }
+
+  private updateOverlayGeometry(): void {
+    const overlay = this.overlayWindow
+    if (!overlay || overlay.isDestroyed()) return
+    overlay.setBounds(computeOverlayBounds(this.config, screen.getPrimaryDisplay().workArea, this.state.participants.length))
+  }
+
   private ensureOverlayWindow(): BrowserWindow {
     const existing = this.overlayWindow
     if (existing && !existing.isDestroyed()) return existing
+    const remote = this.remote
+    if (!remote) throw new Error('Voice overlay requires an active remote page')
     const window = this.createOverlayWindow()
     this.overlayWindow = window
     window.on('closed', () => {
       if (this.overlayWindow === window) this.overlayWindow = null
     })
-    void window.loadFile(path.join(currentDirectory, '..', 'renderer', 'overlay.html'))
+    const overlayUrl = new URL('/overlay.html', remote.serverUrl).toString()
+    window.webContents.on('did-fail-load', (_event, errorCode, errorDescription, _validatedURL, isMainFrame) => {
+      if (isMainFrame && errorCode !== -3 && !window.isDestroyed()) {
+        this.logger.warn(`voice_overlay_page_load_failed: ${errorCode} ${errorDescription}`)
+        this.destroyOverlayWindow()
+      }
+    })
+    void window.loadURL(overlayUrl)
     return window
   }
 
   private createOverlayWindow(): BrowserWindow {
-    const workArea = screen.getPrimaryDisplay().workArea
     const window = new BrowserWindow({
-      width: OVERLAY_WIDTH,
-      height: OVERLAY_HEIGHT,
-      x: workArea.x + OVERLAY_EDGE_MARGIN,
-      y: workArea.y + Math.round((workArea.height - OVERLAY_HEIGHT) / 2),
+      ...computeOverlayBounds(this.config, screen.getPrimaryDisplay().workArea, this.state.participants.length),
       show: false,
       frame: false,
       resizable: false,
