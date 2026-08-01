@@ -249,8 +249,6 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
     expect(overlayBridgeState.childBridge).toBe('undefined')
 
     const overlayPage = await localWindow(application, 'overlay.html')
-    await expect(overlayPage.locator('.overlay-channel-name')).toHaveText('大厅')
-    await expect(overlayPage.locator('.overlay-empty')).toBeHidden()
     await expect(overlayPage.locator('.participant')).toHaveCount(3)
     await expect(overlayPage.getByText('张三（你）')).toBeVisible()
     await expect(overlayPage.getByText('李四')).toBeVisible()
@@ -258,6 +256,9 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
     await expect(overlayPage.locator('.participant.speaking', { hasText: '张三' })).toHaveCount(1)
     await expect(overlayPage.locator('.participant:has-text("李四") .participant-icon:not(.deafened)')).toBeVisible()
     await expect(overlayPage.locator('.participant:has-text("王五") .participant-icon.deafened')).toBeVisible()
+    await expect(overlayPage.locator('.participant.speaking', { hasText: '张三' })).toHaveCSS('opacity', '0.8')
+    await expect(overlayPage.locator('.participant:has-text("李四")')).toHaveCSS('opacity', '0.4')
+    await expect(overlayPage.locator('.participant').first()).toHaveCSS('background-color', 'rgba(17, 18, 20, 0.82)')
 
     const overlayWindowState = await application.evaluate(({ BrowserWindow, screen }) => {
       const overlay = BrowserWindow.getAllWindows().find((window) => (
@@ -271,13 +272,13 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
         bounds: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
         expected: {
           x: workArea.x + 32,
-          y: workArea.y + Math.round((workArea.height - 420) / 2),
+          y: workArea.y + Math.round((workArea.height - 300) / 2),
         },
       }
     })
     expect(overlayWindowState).toEqual({
       alwaysOnTop: true,
-      bounds: { x: expect.any(Number), y: expect.any(Number), width: 280, height: 420 },
+      bounds: { x: expect.any(Number), y: expect.any(Number), width: 280, height: 300 },
       expected: { x: expect.any(Number), y: expect.any(Number) },
     })
     expect(overlayWindowState.bounds.x).toBe(overlayWindowState.expected.x)
@@ -302,16 +303,15 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
       if (!remote) throw new Error('remote WebContentsView was not found')
       return remote.executeJavaScript('window.desktopVoiceOverlay.hello({ minProtocol: 1, maxProtocol: 1 })')
     }, serverUrl)
-    await expect(overlayPage.locator('.overlay-empty')).toBeVisible()
     await expect(overlayPage.locator('.participant')).toHaveCount(0)
+    await expect(overlayPage.locator('body')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
 
     await application.evaluate(({ webContents }, targetUrl) => {
       const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))
       if (!remote) throw new Error('remote WebContentsView was not found')
       return remote.executeJavaScript(`window.desktopVoiceOverlay.pushState({ channel: null, participants: [] })`)
     }, serverUrl)
-    await expect(overlayPage.locator('.overlay-empty')).toBeVisible()
-    await expect(overlayPage.locator('.overlay-empty')).toHaveText('未连接语音')
+    await expect(overlayPage.locator('.participant')).toHaveCount(0)
     await expect(overlayPage.locator('.overlay-channel')).toBeHidden()
 
     await application.evaluate(({ webContents }, targetUrl) => {
