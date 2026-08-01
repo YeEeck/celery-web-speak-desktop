@@ -76,5 +76,5 @@ function renderParticipants(list) {
 }
 
 function initialOf(name) {
-  return name.trim().charAt(0) || '?'
+  return Array.from(name.trim())[0]?.toUpperCase() || '?'
 }

@@ -291,12 +291,13 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
         channel: { name: '大厅' },
         participants: [
           { identity: 'u1', name: '张三', avatarUrl: null, isLocal: true, speaking: false, microphoneMuted: false, deafened: false },
-          { identity: 'u2', name: '李四', avatarUrl: null, isLocal: false, speaking: false, microphoneMuted: true, deafened: false },
+          { identity: 'u2', name: 'alice', avatarUrl: null, isLocal: false, speaking: false, microphoneMuted: true, deafened: false },
         ],
       })`)
     }, serverUrl)
     await expect(overlayPage.locator('.participant.speaking')).toHaveCount(0)
     await expect(overlayPage.locator('.participant')).toHaveCount(2)
+    await expect(overlayPage.locator('.participant:has-text("alice") .participant-avatar')).toHaveText('A')
 
     await application.evaluate(({ webContents }, targetUrl) => {
       const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))
