@@ -1,5 +1,3 @@
-const channelName = document.querySelector('#channel-name')
-const empty = document.querySelector('#empty')
 const participants = document.querySelector('#participants')
 
 const MIC_OFF_ICON = `
@@ -26,12 +24,6 @@ void window.overlayHost.getState().then(render)
 window.overlayHost.onState(render)
 
 function render(state) {
-  const channel = state.channel
-  const emptyVisible = channel === null
-  channelName.textContent = channel?.name ?? ''
-  channelName.closest('.overlay-channel').hidden = emptyVisible
-  empty.hidden = !emptyVisible
-  participants.hidden = emptyVisible
   renderParticipants(state.participants ?? [])
 }
 

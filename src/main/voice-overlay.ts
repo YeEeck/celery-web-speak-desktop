@@ -25,7 +25,7 @@ import { REMOTE_PARTITION, type RemoteBinding } from './windows.js'
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 const OVERLAY_WIDTH = 280
-const OVERLAY_HEIGHT = 420
+const OVERLAY_HEIGHT = 300
 const OVERLAY_EDGE_MARGIN = 32
 
 const EMPTY_STATE: VoiceOverlayState = { channel: null, participants: [] }
