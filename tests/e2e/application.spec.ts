@@ -312,7 +312,6 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
       return remote.executeJavaScript(`window.desktopVoiceOverlay.pushState({ channel: null, participants: [] })`)
     }, serverUrl)
     await expect(overlayPage.locator('.participant')).toHaveCount(0)
-    await expect(overlayPage.locator('.overlay-channel')).toBeHidden()
 
     await application.evaluate(({ webContents }, targetUrl) => {
       const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))

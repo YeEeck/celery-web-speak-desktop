@@ -3,6 +3,8 @@
   font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
   font-synthesis: none;
   --row-background: rgba(17, 18, 20, 0.82);
+  --row-idle-opacity: 0.4;
+  --row-speaking-opacity: 0.8;
   --text-primary: #dbdee1;
   --text-secondary: #9aa0a6;
   --muted: #f5c518;
@@ -47,11 +49,11 @@ body {
   padding: 4px 8px;
   border-radius: 6px;
   background: var(--row-background);
-  opacity: 0.4;
+  opacity: var(--row-idle-opacity);
 }
 
 .participant.speaking {
-  opacity: 0.8;
+  opacity: var(--row-speaking-opacity);
 }
 
 .participant-avatar {
