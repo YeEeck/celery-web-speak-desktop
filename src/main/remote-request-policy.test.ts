@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { isTrustedApplicationAudioRequest } from './application-audio-policy.js'
+import { isTrustedRemoteRequest } from './remote-request-policy.js'
 
-describe('application audio request policy', () => {
+describe('remote request policy', () => {
   const trusted = {
     activeRemote: true,
     senderMatches: true,
@@ -11,7 +11,7 @@ describe('application audio request policy', () => {
   }
 
   it('accepts the active top-level remote frame on the configured origin', () => {
-    expect(isTrustedApplicationAudioRequest(trusted)).toBe(true)
+    expect(isTrustedRemoteRequest(trusted)).toBe(true)
   })
 
   it.each([
@@ -21,7 +21,6 @@ describe('application audio request policy', () => {
     { senderUrl: 'https://evil.example.com' },
     { senderUrl: 'not a url' },
   ])('rejects untrusted request context %#', (change) => {
-    expect(isTrustedApplicationAudioRequest({ ...trusted, ...change })).toBe(false)
+    expect(isTrustedRemoteRequest({ ...trusted, ...change })).toBe(false)
   })
 })
-

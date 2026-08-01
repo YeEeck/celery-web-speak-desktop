@@ -75,7 +75,7 @@
                                    Go API / WS / LiveKit
 ```
 
-本地配置窗口和远程应用窗口是两个不同的无边框 `BrowserWindow`。配置窗口使用只包含配置与窗口控制 IPC 的 preload。远程应用窗口的本地壳层只负责标题栏和菜单，服务器页面承载在独立的 `WebContentsView` 中；远程页面只加载严格限权的应用音频 preload，不获得通用 Node.js 或 Electron API。
+本地配置窗口和远程应用窗口是两个不同的无边框 `BrowserWindow`。配置窗口使用只包含配置与窗口控制 IPC 的 preload。远程应用窗口的本地壳层只负责标题栏和菜单，服务器页面承载在独立的 `WebContentsView` 中；远程页面只加载严格限权的远程桥 preload（应用音频与语音浮层，见 `src/preload/remote-bridges.cjs`），不获得通用 Node.js 或 Electron API。
 
 切换服务器时销毁远程窗口、显示配置窗口、保存新 Origin，然后重启应用。重启保证启动早期的 Chromium HTTP 安全上下文参数与当前服务器一致。
 
@@ -228,7 +228,7 @@ GET {serverOrigin}/api/health
 - 加载当前服务器 Origin 根页面。
 - 开启 `contextIsolation`、`sandbox` 和 `webSecurity`。
 - 关闭 `nodeIntegration`。
-- 只加载应用音频专用 preload，并由 Main 验证 sender、顶层 frame 与服务器 Origin。
+- 只加载严格限权的远程桥 preload，并由 Main 验证 sender、顶层 frame 与服务器 Origin。
 - 关闭窗口即退出进程，不转入托盘。
 - 正式包拦截 DevTools 快捷键并关闭已意外打开的 DevTools。
 

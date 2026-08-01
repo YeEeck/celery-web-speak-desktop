@@ -18,7 +18,7 @@ import {
 } from '../shared/application-audio-api.js'
 import type { ApplicationAudioWorkerEvent, NativeProbeResult } from '../shared/application-audio-worker.js'
 import { ApplicationAudioPicker } from './application-audio-picker.js'
-import { isTrustedApplicationAudioRequest } from './application-audio-policy.js'
+import { isTrustedRemoteRequest } from './remote-request-policy.js'
 import { ApplicationAudioWorkerProcess } from './application-audio-worker.js'
 import type { Logger } from './logger.js'
 
@@ -333,7 +333,7 @@ export class ApplicationAudioCoordinator {
     const topFrame = Boolean(senderFrame &&
       senderFrame.parent === null &&
       senderFrame.frameTreeNodeId === event.sender.mainFrame.frameTreeNodeId)
-    if (!remote || !isTrustedApplicationAudioRequest({
+    if (!remote || !isTrustedRemoteRequest({
       activeRemote: true,
       senderMatches: event.sender === remote.webContents,
       topFrame,

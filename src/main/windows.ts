@@ -15,7 +15,7 @@ import { configureNavigationPolicy, configureSessionPolicy } from './session-pol
 import { visibleWindowBounds } from './window-state.js'
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
-const REMOTE_PARTITION = 'persist:celery-web-speak'
+export const REMOTE_PARTITION = 'persist:celery-web-speak'
 const TITLE_BAR_HEIGHT = 32
 // 打包后由 electron-builder 处理图标，仅开发模式手动指定
 const windowIcon = app.isPackaged ? undefined : path.join(currentDirectory, '..', '..', 'build', 'icons', 'icon.png')
@@ -87,7 +87,7 @@ export function createRemoteWindow(
   const remoteView = new WebContentsView({
     webPreferences: {
       partition: REMOTE_PARTITION,
-      preload: path.join(currentDirectory, '..', 'preload', 'application-audio.cjs'),
+      preload: path.join(currentDirectory, '..', 'preload', 'remote-bridges.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,

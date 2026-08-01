@@ -204,6 +204,121 @@ test('当前 HTTP Origin 是安全上下文并自动取得麦克风', async () =
   }
 })
 
+test('语音浮层：握手、启停、状态渲染与销毁', async () => {
+  const server = await startMediaServer()
+  const address = server.address()
+  if (!address || typeof address === 'string') throw new Error('test server did not bind to TCP')
+  const serverUrl = `http://127.0.0.1:${address.port}`
+  const userData = await mkdtemp(path.join(tmpdir(), 'cws-electron-e2e-'))
+  await mkdir(userData, { recursive: true })
+  await writeFile(path.join(userData, 'config.json'), JSON.stringify({
+    version: 1,
+    serverUrl,
+    window: { width: 1280, height: 800, x: null, y: null, maximized: false },
+  }))
+
+  const application = await launch(userData)
+  try {
+    const page = await localWindow(application, 'shell.html')
+    await expect(page.getByRole('button', { name: '打开应用菜单' })).toBeVisible()
+    await expect.poll(() => remoteText(application, serverUrl, 'h1')).toBe('HTTP voice test')
+
+    const overlayBridgeState = await application.evaluate(async ({ webContents }, targetUrl) => {
+      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))
+      if (!remote) throw new Error('remote WebContentsView was not found')
+      const topBridge = await remote.executeJavaScript(`(async () => {
+        const hello = await window.desktopVoiceOverlay.hello({ minProtocol: 1, maxProtocol: 1 })
+        await window.desktopVoiceOverlay.setEnabled(true)
+        window.desktopVoiceOverlay.pushState({
+          channel: { name: '大厅' },
+          participants: [
+            { identity: 'u1', name: '张三', avatarUrl: null, isLocal: true, speaking: true, microphoneMuted: false, deafened: false },
+            { identity: 'u2', name: '李四', avatarUrl: null, isLocal: false, speaking: false, microphoneMuted: true, deafened: false },
+            { identity: 'u3', name: '王五', avatarUrl: null, isLocal: false, speaking: false, microphoneMuted: false, deafened: true },
+          ],
+        })
+        return hello
+      })()`)
+      const childBridge = await remote.executeJavaScript(`(() => {
+        const frame = document.querySelector('iframe')
+        return frame?.contentWindow ? typeof frame.contentWindow.desktopVoiceOverlay : null
+      })()`)
+      return { topBridge, childBridge }
+    }, serverUrl)
+    expect(overlayBridgeState.topBridge).toEqual({ protocol: 1, capabilities: ['voice_overlay'] })
+    expect(overlayBridgeState.childBridge).toBe('undefined')
+
+    const overlayPage = await localWindow(application, 'overlay.html')
+    await expect(overlayPage.locator('.overlay-channel-name')).toHaveText('大厅')
+    await expect(overlayPage.locator('.overlay-empty')).toBeHidden()
+    await expect(overlayPage.locator('.participant')).toHaveCount(3)
+    await expect(overlayPage.getByText('张三（你）')).toBeVisible()
+    await expect(overlayPage.getByText('李四')).toBeVisible()
+    await expect(overlayPage.getByText('王五')).toBeVisible()
+    await expect(overlayPage.locator('.participant.speaking', { hasText: '张三' })).toHaveCount(1)
+    await expect(overlayPage.locator('.participant:has-text("李四") .participant-icon:not(.deafened)')).toBeVisible()
+    await expect(overlayPage.locator('.participant:has-text("王五") .participant-icon.deafened')).toBeVisible()
+
+    const overlayWindowState = await application.evaluate(({ BrowserWindow, screen }) => {
+      const overlay = BrowserWindow.getAllWindows().find((window) => (
+        window.webContents.getURL().endsWith('overlay.html')
+      ))
+      if (!overlay) return null
+      const bounds = overlay.getBounds()
+      const workArea = screen.getPrimaryDisplay().workArea
+      return {
+        alwaysOnTop: overlay.isAlwaysOnTop(),
+        bounds: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
+        expected: {
+          x: workArea.x + 32,
+          y: workArea.y + Math.round((workArea.height - 420) / 2),
+        },
+      }
+    })
+    expect(overlayWindowState).toEqual({
+      alwaysOnTop: true,
+      bounds: { x: 32, y: expect.any(Number), width: 280, height: 420 },
+      expected: { x: 32, y: expect.any(Number) },
+    })
+    expect(overlayWindowState.bounds.y).toBe(overlayWindowState.expected.y)
+
+    await application.evaluate(({ webContents }, targetUrl) => {
+      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))
+      if (!remote) throw new Error('remote WebContentsView was not found')
+      return remote.executeJavaScript(`window.desktopVoiceOverlay.pushState({
+        channel: { name: '大厅' },
+        participants: [
+          { identity: 'u1', name: '张三', avatarUrl: null, isLocal: true, speaking: false, microphoneMuted: false, deafened: false },
+          { identity: 'u2', name: '李四', avatarUrl: null, isLocal: false, speaking: false, microphoneMuted: true, deafened: false },
+        ],
+      })`)
+    }, serverUrl)
+    await expect(overlayPage.locator('.participant.speaking')).toHaveCount(0)
+    await expect(overlayPage.locator('.participant')).toHaveCount(2)
+
+    await application.evaluate(({ webContents }, targetUrl) => {
+      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))
+      if (!remote) throw new Error('remote WebContentsView was not found')
+      return remote.executeJavaScript(`window.desktopVoiceOverlay.pushState({ channel: null, participants: [] })`)
+    }, serverUrl)
+    await expect(overlayPage.locator('.overlay-empty')).toBeVisible()
+    await expect(overlayPage.locator('.overlay-empty')).toHaveText('未连接语音')
+    await expect(overlayPage.locator('.overlay-channel')).toBeHidden()
+
+    await application.evaluate(({ webContents }, targetUrl) => {
+      const remote = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(targetUrl))
+      if (!remote) throw new Error('remote WebContentsView was not found')
+      return remote.executeJavaScript('window.desktopVoiceOverlay.setEnabled(false)')
+    }, serverUrl)
+    await expect.poll(() => (
+      application.windows().some((candidate) => isLocalDocument(candidate, 'overlay.html'))
+    )).toBe(false)
+  } finally {
+    await application.close()
+    await closeServer(server)
+  }
+})
+
 async function launch(userData: string, extraEnv: Record<string, string> = {}): Promise<ElectronApplication> {
   const environment = { ...process.env }
   delete environment.ELECTRON_RUN_AS_NODE

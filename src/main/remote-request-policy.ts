@@ -1,4 +1,4 @@
-export interface ApplicationAudioRequestContext {
+export interface RemoteRequestContext {
   activeRemote: boolean
   senderMatches: boolean
   topFrame: boolean
@@ -6,7 +6,7 @@ export interface ApplicationAudioRequestContext {
   serverUrl: string
 }
 
-export function isTrustedApplicationAudioRequest(context: ApplicationAudioRequestContext): boolean {
+export function isTrustedRemoteRequest(context: RemoteRequestContext): boolean {
   if (!context.activeRemote || !context.senderMatches || !context.topFrame) return false
   try {
     return new URL(context.senderUrl).origin === new URL(context.serverUrl).origin
@@ -14,4 +14,3 @@ export function isTrustedApplicationAudioRequest(context: ApplicationAudioReques
     return false
   }
 }
-

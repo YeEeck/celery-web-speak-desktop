@@ -1,5 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron') as typeof import('electron')
 
+// 远程服务器页面可用的全部桥。preload 只接受单文件，沙箱内无法 require 本地
+// 文件，因此各桥集中在此文件；暴露给页面的 API 名是契约，不得改名。
+
 const channels = {
   hello: 'application-audio:hello',
   getSnapshot: 'application-audio:get-snapshot',
@@ -118,3 +121,23 @@ function readSessionId(input: unknown): string | null {
   const sessionId = (input as { sessionId?: unknown }).sessionId
   return typeof sessionId === 'string' && sessionIdPattern.test(sessionId) ? sessionId : null
 }
+
+// ---- 语音浮层桥 ----
+
+const voiceOverlayChannels = {
+  hello: 'voice-overlay:hello',
+  setEnabled: 'voice-overlay:set-enabled',
+  state: 'voice-overlay:state',
+} as const
+
+const voiceOverlayBridge = Object.freeze({
+  hello: (input: unknown) => ipcRenderer.invoke(voiceOverlayChannels.hello, input),
+  setEnabled: (enabled: unknown) => (
+    ipcRenderer.invoke(voiceOverlayChannels.setEnabled, { enabled })
+  ),
+  pushState: (state: unknown) => {
+    ipcRenderer.send(voiceOverlayChannels.state, state)
+  },
+})
+
+contextBridge.exposeInMainWorld('desktopVoiceOverlay', voiceOverlayBridge)

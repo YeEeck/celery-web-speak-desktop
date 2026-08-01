@@ -11,6 +11,7 @@ import { disableApplicationMenu, registerApplicationMenuIpc, showApplicationMenu
 import { validateServer } from './server-validator.js'
 import { createRemoteWindow, createSetupWindow } from './windows.js'
 import { ApplicationAudioCoordinator } from './application-audio.js'
+import { VoiceOverlayCoordinator } from './voice-overlay.js'
 import { UpdateChecker } from './update-checker.js'
 import { SETUP_CHANNELS, type SetupSaveRequest, type SetupState } from '../shared/setup-api.js'
 import { WINDOW_CHANNELS, type WindowMenuPosition } from '../shared/window-api.js'
@@ -45,6 +46,7 @@ let updateDialogOpen = false
 let store: ConfigStore
 let logger: Logger
 let applicationAudio: ApplicationAudioCoordinator | null = null
+let voiceOverlay: VoiceOverlayCoordinator | null = null
 let updateChecker: UpdateChecker | null = null
 
 app.on('certificate-error', (event, _webContents, _url, _error, _certificate, callback) => {
@@ -57,6 +59,7 @@ app.on('second-instance', () => focusCurrentWindow())
 app.on('before-quit', () => {
   quitting = true
   applicationAudio?.shutdown()
+  voiceOverlay?.shutdown()
 })
 
 app.on('window-all-closed', () => {
@@ -74,6 +77,7 @@ async function initialize(): Promise<void> {
   store = new ConfigStore(app.getPath('userData'))
   logger = new Logger(app.getPath('userData'))
   applicationAudio = new ApplicationAudioCoordinator(logger)
+  voiceOverlay = new VoiceOverlayCoordinator(logger)
   updateChecker = new UpdateChecker(store, logger, broadcastUpdateState)
   logger.info('application_started', { version: app.getVersion() })
   registerSetupIpc()
@@ -198,6 +202,7 @@ function showSetup(canCancel: boolean, startupError = ''): void {
   currentServerUrl = ''
   const previous = currentWindow
   applicationAudio?.unbindRemote()
+  voiceOverlay?.unbindRemote()
   currentRemoteContents = null
   currentWindow = createSetupWindow()
   attachWindowChrome(currentWindow)
@@ -220,6 +225,7 @@ function showRemote(config: NonNullable<Awaited<ReturnType<ConfigStore['load']>>
   currentWindow = remote.window
   currentRemoteContents = remote.webContents
   applicationAudio?.bindRemote(remote.window, remote.webContents, config.serverUrl)
+  voiceOverlay?.bindRemote(remote.window, remote.webContents, config.serverUrl)
   attachWindowChrome(currentWindow)
   previous?.destroy()
 }
