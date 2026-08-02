@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron') as typeof import('ele
 const renderChannel = 'voice-overlay:render'
 const getStateChannel = 'voice-overlay:get-state'
 const pushConfigChannel = 'voice-overlay:push-config'
+const reportContentSizeChannel = 'voice-overlay:report-content-size'
 const stateListeners = new Set<(state: unknown) => void>()
 const configListeners = new Set<(config: unknown) => void>()
 
@@ -25,4 +26,5 @@ contextBridge.exposeInMainWorld('overlayHost', {
   getState: () => ipcRenderer.invoke(getStateChannel),
   onState: (listener: unknown) => subscribe(stateListeners, listener),
   onConfig: (listener: unknown) => subscribe(configListeners, listener),
+  reportContentSize: (size: unknown) => ipcRenderer.send(reportContentSizeChannel, size),
 })

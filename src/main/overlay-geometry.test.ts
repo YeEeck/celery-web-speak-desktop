@@ -13,8 +13,8 @@ const baseConfig: VoiceOverlayConfig = {
 }
 
 describe('computeOverlayBounds', () => {
-  it('centers a 100% scale window for 3 participants', () => {
-    expect(computeOverlayBounds(baseConfig, WORK_AREA, 3)).toEqual({
+  it('centers a window with the reported size on the percentage coordinates', () => {
+    expect(computeOverlayBounds(baseConfig, WORK_AREA, { width: 280, height: 108 })).toEqual({
       x: 820,
       y: 486,
       width: 280,
@@ -26,7 +26,7 @@ describe('computeOverlayBounds', () => {
     expect(computeOverlayBounds(
       { ...baseConfig, positionXPercent: 25, positionYPercent: 75 },
       WORK_AREA,
-      1,
+      { width: 280, height: 36 },
     )).toEqual({
       x: 340,
       y: 792,
@@ -35,8 +35,8 @@ describe('computeOverlayBounds', () => {
     })
   })
 
-  it('scales the window and row height with the scale percent', () => {
-    expect(computeOverlayBounds({ ...baseConfig, scalePercent: 150 }, WORK_AREA, 1)).toEqual({
+  it('uses the reported size verbatim without row prediction', () => {
+    expect(computeOverlayBounds({ ...baseConfig, positionXPercent: 50, positionYPercent: 50 }, WORK_AREA, { width: 420, height: 54 })).toEqual({
       x: 750,
       y: 513,
       width: 420,
@@ -44,21 +44,8 @@ describe('computeOverlayBounds', () => {
     })
   })
 
-  it('keeps at least one row height for the empty state', () => {
-    expect(computeOverlayBounds(baseConfig, WORK_AREA, 0)).toEqual({
-      x: 820,
-      y: 522,
-      width: 280,
-      height: 36,
-    })
-  })
-
-  it('grows the height with the participant count', () => {
-    expect(computeOverlayBounds(baseConfig, WORK_AREA, 10).height).toBe(360)
-  })
-
   it('offsets the center by the work area origin (multi-monitor)', () => {
-    expect(computeOverlayBounds(baseConfig, { x: 1920, y: 0, width: 1920, height: 1080 }, 1)).toEqual({
+    expect(computeOverlayBounds(baseConfig, { x: 1920, y: 0, width: 1920, height: 1080 }, { width: 280, height: 36 })).toEqual({
       x: 2740,
       y: 522,
       width: 280,

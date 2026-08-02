@@ -15,9 +15,11 @@ import {
   VOICE_OVERLAY_CHANNELS,
   VOICE_OVERLAY_PROTOCOL,
   negotiateOverlayProtocol,
+  normalizeContentSize,
   normalizeVoiceOverlayConfig,
   normalizeVoiceOverlayEnabledRequest,
   normalizeVoiceOverlayState,
+  type ContentSize,
   type VoiceOverlayConfig,
   type VoiceOverlayHello,
   type VoiceOverlayState,
@@ -32,12 +34,18 @@ const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 
 const EMPTY_STATE: VoiceOverlayState = { channel: null, participants: [] }
 
+// 首个尺寸上报到达前的占位窗口尺寸（窗口隐藏，不产生可见效果）。
+const INITIAL_CONTENT_SIZE: ContentSize = { width: 1, height: 1 }
+
 export class VoiceOverlayCoordinator {
   private remote: RemoteBinding | null = null
   private overlayWindow: BrowserWindow | null = null
   private state: VoiceOverlayState = EMPTY_STATE
   private config: VoiceOverlayConfig = DEFAULT_VOICE_OVERLAY_CONFIG
   private negotiatedProtocol = 0
+  private lastReportedSize: ContentSize | null = null
+  private overlayReady = false
+  private overlayShown = false
 
   constructor(private readonly logger: Logger) {
     ipcMain.handle(VOICE_OVERLAY_CHANNELS.hello, (event, input: unknown) => (
@@ -51,6 +59,9 @@ export class VoiceOverlayCoordinator {
     })
     ipcMain.on(VOICE_OVERLAY_CHANNELS.setConfig, (event, input: unknown) => {
       this.receiveConfig(event, input)
+    })
+    ipcMain.on(OVERLAY_WINDOW_CHANNELS.reportContentSize, (event, input: unknown) => {
+      this.receiveContentSize(event, input)
     })
     ipcMain.handle(OVERLAY_WINDOW_CHANNELS.getState, (event) => {
       if (event.sender !== this.overlayWindow?.webContents) {
@@ -94,7 +105,7 @@ export class VoiceOverlayCoordinator {
     this.negotiatedProtocol = negotiateOverlayProtocol(range)
     const compatible = this.negotiatedProtocol > 0
     if (this.negotiatedProtocol < VOICE_OVERLAY_PROTOCOL) {
-      // 协议 1（或不可兼容）视为浮层整体禁用：销毁窗口，旧 Web 的后续
+      // 协议 2 及以下（或不可兼容）视为浮层整体禁用：销毁窗口，旧 Web 的后续
       // setEnabled/state/config 均不再生效。
       this.destroyOverlayWindow()
     }
@@ -107,7 +118,7 @@ export class VoiceOverlayCoordinator {
   private setEnabled(event: IpcMainInvokeEvent, input: unknown): void {
     this.assertTrusted(event)
     if (this.negotiatedProtocol < VOICE_OVERLAY_PROTOCOL) {
-      this.logger.info('voice_overlay_protocol_1_disabled')
+      this.logger.info('voice_overlay_old_protocol_disabled')
       this.destroyOverlayWindow()
       return
     }
@@ -135,7 +146,6 @@ export class VoiceOverlayCoordinator {
     }
     this.state = state
     this.sendStateToOverlay()
-    this.updateOverlayGeometry()
   }
 
   private receiveConfig(event: IpcMainEvent, input: unknown): void {
@@ -154,10 +164,30 @@ export class VoiceOverlayCoordinator {
     this.sendConfigToOverlay()
   }
 
+  // 浮层窗口 → 壳：内容尺寸上报。窗口位置可能随配置中心点变化，故尺寸到达时重新定位。
+  private receiveContentSize(event: IpcMainEvent, input: unknown): void {
+    const overlay = this.overlayWindow
+    if (!overlay || event.sender !== overlay.webContents) {
+      this.logger.warn('voice_overlay_untrusted_content_size_dropped')
+      return
+    }
+    const size = normalizeContentSize(input)
+    if (!size) {
+      this.logger.warn('voice_overlay_invalid_content_size_dropped')
+      return
+    }
+    const workArea = screen.getPrimaryDisplay().workArea
+    this.lastReportedSize = {
+      width: Math.min(size.width, workArea.width),
+      height: Math.min(size.height, workArea.height),
+    }
+    this.updateOverlayGeometry()
+    this.maybeShowOverlayWindow()
+  }
+
   private clearState(): void {
     this.state = EMPTY_STATE
     this.sendStateToOverlay()
-    this.updateOverlayGeometry()
   }
 
   private sendStateToOverlay(): void {
@@ -175,7 +205,19 @@ export class VoiceOverlayCoordinator {
   private updateOverlayGeometry(): void {
     const overlay = this.overlayWindow
     if (!overlay || overlay.isDestroyed()) return
-    overlay.setBounds(computeOverlayBounds(this.config, screen.getPrimaryDisplay().workArea, this.state.participants.length))
+    overlay.setBounds(computeOverlayBounds(
+      this.config,
+      screen.getPrimaryDisplay().workArea,
+      this.lastReportedSize ?? INITIAL_CONTENT_SIZE,
+    ))
+  }
+
+  private maybeShowOverlayWindow(): void {
+    const overlay = this.overlayWindow
+    if (!overlay || overlay.isDestroyed()) return
+    if (!this.overlayReady || this.overlayShown || !this.lastReportedSize) return
+    overlay.show()
+    this.overlayShown = true
   }
 
   private ensureOverlayWindow(): BrowserWindow {
@@ -201,7 +243,7 @@ export class VoiceOverlayCoordinator {
 
   private createOverlayWindow(): BrowserWindow {
     const window = new BrowserWindow({
-      ...computeOverlayBounds(this.config, screen.getPrimaryDisplay().workArea, this.state.participants.length),
+      ...computeOverlayBounds(this.config, screen.getPrimaryDisplay().workArea, INITIAL_CONTENT_SIZE),
       show: false,
       frame: false,
       resizable: false,
@@ -225,8 +267,11 @@ export class VoiceOverlayCoordinator {
     })
     window.setAlwaysOnTop(true, 'screen-saver')
     window.setIgnoreMouseEvents(true)
+    this.overlayReady = false
+    this.overlayShown = false
     window.once('ready-to-show', () => {
-      if (!window.isDestroyed()) window.show()
+      this.overlayReady = true
+      this.maybeShowOverlayWindow()
     })
     return window
   }
@@ -234,6 +279,9 @@ export class VoiceOverlayCoordinator {
   private destroyOverlayWindow(): void {
     const overlay = this.overlayWindow
     this.overlayWindow = null
+    this.lastReportedSize = null
+    this.overlayReady = false
+    this.overlayShown = false
     if (overlay && !overlay.isDestroyed()) overlay.destroy()
   }
 

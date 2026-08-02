@@ -1,7 +1,9 @@
 import { normalizeProtocolRange } from './protocol-api.js'
 import type { ProtocolHello, ProtocolRange } from './protocol-api.js'
 
-export const VOICE_OVERLAY_PROTOCOL = 2
+// 协议 3：浮层窗口尺寸由页面测量上报（report-content-size），壳层不再预测行高。
+// 协议 2 及以下为旧协议：协商回退时浮层整体禁用。
+export const VOICE_OVERLAY_PROTOCOL = 3
 
 export const VOICE_OVERLAY_CAPABILITIES = [
   'voice_overlay',
@@ -20,6 +22,7 @@ export const OVERLAY_WINDOW_CHANNELS = {
   render: 'voice-overlay:render',
   getState: 'voice-overlay:get-state',
   pushConfig: 'voice-overlay:push-config',
+  reportContentSize: 'voice-overlay:report-content-size',
 } as const
 
 export type VoiceOverlayHello = ProtocolHello
@@ -67,6 +70,12 @@ export interface VoiceOverlayConfig {
   silentOpacityPercent: number      // 未说话时整行不透明度；10~100，默认 40
 }
 
+// 浮层页面上报的内容尺寸（CSS 像素，含 zoom 缩放）；壳层据此设置窗口大小。
+export interface ContentSize {
+  width: number
+  height: number
+}
+
 function clampPercent(value: number, limit: { min: number; max: number }): number {
   return Math.min(limit.max, Math.max(limit.min, value))
 }
@@ -92,6 +101,17 @@ export function normalizeVoiceOverlayEnabledRequest(input: unknown): boolean | n
   if (!input || typeof input !== 'object') return null
   const enabled = (input as { enabled?: unknown }).enabled
   return typeof enabled === 'boolean' ? enabled : null
+}
+
+// 内容尺寸钳制到 ≥ 1；上限（工作区大小）由壳层在应用时校验。
+export function normalizeContentSize(input: unknown): ContentSize | null {
+  if (!input || typeof input !== 'object') return null
+  const candidate = input as Record<string, unknown>
+  if (!Number.isFinite(candidate.width) || !Number.isFinite(candidate.height)) return null
+  return {
+    width: Math.max(1, Math.round(candidate.width as number)),
+    height: Math.max(1, Math.round(candidate.height as number)),
+  }
 }
 
 export function normalizeVoiceOverlayState(input: unknown): VoiceOverlayState | null {

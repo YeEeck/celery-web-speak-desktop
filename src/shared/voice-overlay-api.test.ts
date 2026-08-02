@@ -6,6 +6,7 @@ import {
   VOICE_OVERLAY_CHANNELS,
   VOICE_OVERLAY_PROTOCOL,
   negotiateOverlayProtocol,
+  normalizeContentSize,
   normalizeVoiceOverlayConfig,
   normalizeVoiceOverlayEnabledRequest,
   normalizeVoiceOverlayState,
@@ -13,7 +14,7 @@ import {
 
 describe('voice overlay API', () => {
   it('uses the cross-repository protocol number and capability', () => {
-    expect(VOICE_OVERLAY_PROTOCOL).toBe(2)
+    expect(VOICE_OVERLAY_PROTOCOL).toBe(3)
     expect(VOICE_OVERLAY_CAPABILITIES).toEqual(['voice_overlay'])
   })
 
@@ -31,21 +32,24 @@ describe('voice overlay API', () => {
       render: 'voice-overlay:render',
       getState: 'voice-overlay:get-state',
       pushConfig: 'voice-overlay:push-config',
+      reportContentSize: 'voice-overlay:report-content-size',
     })
   })
 
   describe('negotiateOverlayProtocol', () => {
     it.each([
+      [{ minProtocol: 1, maxProtocol: 3 }, 3],
+      [{ minProtocol: 3, maxProtocol: 3 }, 3],
+      [{ minProtocol: 2, maxProtocol: 3 }, 3],
       [{ minProtocol: 1, maxProtocol: 2 }, 2],
       [{ minProtocol: 2, maxProtocol: 2 }, 2],
       [{ minProtocol: 1, maxProtocol: 1 }, 1],
-      [{ minProtocol: 1, maxProtocol: 3 }, 2],
     ])('negotiates %o to protocol %i', (range, expected) => {
       expect(negotiateOverlayProtocol(range)).toBe(expected)
     })
 
     it('rejects ranges above the shell protocol', () => {
-      expect(negotiateOverlayProtocol({ minProtocol: 3, maxProtocol: 4 })).toBe(0)
+      expect(negotiateOverlayProtocol({ minProtocol: 4, maxProtocol: 4 })).toBe(0)
     })
   })
 
@@ -122,6 +126,28 @@ describe('voice overlay API', () => {
       'true',
     ])('rejects %#', (input) => {
       expect(normalizeVoiceOverlayEnabledRequest(input)).toBeNull()
+    })
+  })
+
+  describe('normalizeContentSize', () => {
+    it('accepts a reported content size', () => {
+      expect(normalizeContentSize({ width: 280, height: 204 })).toEqual({ width: 280, height: 204 })
+    })
+
+    it('clamps fractional and below-minimum values', () => {
+      expect(normalizeContentSize({ width: 280.4, height: 0 })).toEqual({ width: 280, height: 1 })
+    })
+
+    it.each([
+      null,
+      undefined,
+      {},
+      { width: 280 },
+      { width: '280', height: 36 },
+      { width: NaN, height: 36 },
+      { width: 280, height: Infinity },
+    ])('rejects %#', (input) => {
+      expect(normalizeContentSize(input)).toBeNull()
     })
   })
 

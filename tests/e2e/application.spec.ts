@@ -237,7 +237,7 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
     }, {
       url: serverUrl,
       hello: `(async () => {
-        const hello = await window.desktopVoiceOverlay.hello({ minProtocol: 1, maxProtocol: 2 })
+        const hello = await window.desktopVoiceOverlay.hello({ minProtocol: 1, maxProtocol: 3 })
         await window.desktopVoiceOverlay.setEnabled(true)
         window.desktopVoiceOverlay.pushState({
           channel: { name: '大厅' },
@@ -250,7 +250,7 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
         return hello
       })()`,
     })
-    expect(overlayBridgeState.topBridge).toEqual({ protocol: 2, capabilities: ['voice_overlay'] })
+    expect(overlayBridgeState.topBridge).toEqual({ protocol: 3, capabilities: ['voice_overlay'] })
     expect(overlayBridgeState.childBridge).toBe('undefined')
     const overlayPage = await overlayWindow(application, serverUrl)
     await expect(overlayPage.locator('.participant')).toHaveCount(3)
@@ -436,7 +436,8 @@ async function startMediaServer(): Promise<Server> {
       <head>
         <meta charset="utf-8">
         <style>
-          .participant { min-height: 36px; padding: 4px 8px; border-radius: 6px; background: rgba(17, 18, 20, 0.82); }
+          #participants { width: 280px; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+          .participant { height: 36px; padding: 4px 8px; box-sizing: border-box; border-radius: 6px; background: rgba(17, 18, 20, 0.82); }
           .participant.speaking { opacity: 0.8; }
           .participant:not(.speaking) { opacity: 0.4; }
           .participant-avatar { display: inline-block; width: 26px; height: 26px; background: #fff; }
@@ -449,6 +450,13 @@ async function startMediaServer(): Promise<Server> {
         <script>
           const list = document.querySelector('#participants')
           const configOutput = document.querySelector('#config-output')
+          function reportContentSize() {
+            const rect = list.getBoundingClientRect()
+            window.overlayHost.reportContentSize({
+              width: Math.round(rect.width),
+              height: Math.round(rect.height),
+            })
+          }
           function renderState(state) {
             const items = state.participants ?? []
             list.replaceChildren(...items.map((participant) => {
@@ -476,9 +484,12 @@ async function startMediaServer(): Promise<Server> {
               }
               return row
             }))
+            reportContentSize()
           }
           function renderConfig(config) {
             configOutput.textContent = JSON.stringify(config)
+            list.style.zoom = (config.scalePercent ?? 100) / 100
+            reportContentSize()
           }
           window.overlayHost.getState().then((result) => {
             renderState(result.state)
