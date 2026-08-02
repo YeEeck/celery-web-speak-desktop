@@ -93,7 +93,7 @@ export class VoiceOverlayCoordinator {
     this.clearState()
     this.negotiatedProtocol = negotiateOverlayProtocol(range)
     const compatible = this.negotiatedProtocol > 0
-    if (!compatible || this.negotiatedProtocol < VOICE_OVERLAY_PROTOCOL) {
+    if (this.negotiatedProtocol < VOICE_OVERLAY_PROTOCOL) {
       // 协议 1（或不可兼容）视为浮层整体禁用：销毁窗口，旧 Web 的后续
       // setEnabled/state/config 均不再生效。
       this.destroyOverlayWindow()
