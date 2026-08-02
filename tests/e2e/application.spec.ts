@@ -297,6 +297,8 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
       speakingOpacityPercent: 90,
       silentOpacityPercent: 20,
     })`)
+    // 配置经壳层转发到浮层页后才应用 zoom 并上报新尺寸，窗口几何更新是异步的。
+    await expect.poll(() => overlayWindowSize(application)).toEqual({ width: 420, height: 162 })
     const overlayScaledState = await application.evaluate(({ BrowserWindow, screen }) => {
       const overlay = BrowserWindow.getAllWindows().find((window) => (
         window.webContents.getURL().endsWith('/overlay.html')
@@ -373,6 +375,17 @@ async function overlayWindowHeight(application: ElectronApplication): Promise<nu
       window.webContents.getURL().endsWith('/overlay.html')
     ))
     return overlay ? overlay.getBounds().height : null
+  })
+}
+
+async function overlayWindowSize(application: ElectronApplication): Promise<{ width: number; height: number } | null> {
+  return application.evaluate(({ BrowserWindow }) => {
+    const overlay = BrowserWindow.getAllWindows().find((window) => (
+      window.webContents.getURL().endsWith('/overlay.html')
+    ))
+    if (!overlay) return null
+    const bounds = overlay.getBounds()
+    return { width: bounds.width, height: bounds.height }
   })
 }
 
