@@ -13,6 +13,7 @@ import { createRemoteWindow, createSetupWindow } from './windows.js'
 import { ApplicationAudioCoordinator } from './application-audio.js'
 import { VoiceOverlayCoordinator } from './voice-overlay.js'
 import { UpdateChecker } from './update-checker.js'
+import { createStartupEntry, type StartupEntryManager } from './startup-entry.js'
 import { SETUP_CHANNELS, type SetupSaveRequest, type SetupState } from '../shared/setup-api.js'
 import { WINDOW_CHANNELS, type WindowMenuPosition } from '../shared/window-api.js'
 import { UPDATE_CHANNELS } from '../shared/update-api.js'
@@ -48,6 +49,7 @@ let logger: Logger
 let applicationAudio: ApplicationAudioCoordinator | null = null
 let voiceOverlay: VoiceOverlayCoordinator | null = null
 let updateChecker: UpdateChecker | null = null
+let startupEntry: StartupEntryManager | null = null
 
 app.on('certificate-error', (event, _webContents, _url, _error, _certificate, callback) => {
   event.preventDefault()
@@ -79,6 +81,7 @@ async function initialize(): Promise<void> {
   applicationAudio = new ApplicationAudioCoordinator(logger)
   voiceOverlay = new VoiceOverlayCoordinator(logger)
   updateChecker = new UpdateChecker(store, logger, broadcastUpdateState)
+  startupEntry = createStartupEntry(logger)
   logger.info('application_started', { version: app.getVersion() })
   registerSetupIpc()
   registerWindowIpc()
@@ -90,6 +93,10 @@ async function initialize(): Promise<void> {
     },
     checkUpdate: () => void manualCheckUpdate(),
     toggleAutoCheck: () => void toggleAutoCheckUpdate(),
+    toggleAutostart: () => {
+      if (!startupEntry) return
+      startupEntry.setEnabled(!startupEntry.isEnabled())
+    },
   })
   disableApplicationMenu()
 
@@ -131,7 +138,12 @@ function registerWindowIpc(): void {
     const window = assertWindowSender(event.sender)
     const position = normalizeMenuPosition(input, window)
     const config = await store.load()
-    showApplicationMenu(window, position, !setupMode, config?.autoCheckUpdate ?? true)
+    showApplicationMenu(window, position, {
+      remoteMode: !setupMode,
+      autoCheckUpdate: config?.autoCheckUpdate ?? true,
+      startupEntryVisible: startupEntry !== null,
+      startupEntryEnabled: startupEntry?.isEnabled() ?? false,
+    })
   })
 }
 

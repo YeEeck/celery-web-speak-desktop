@@ -6,17 +6,55 @@ import type { WindowMenuPosition } from '../shared/window-api.js'
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 const MENU_WIDTH = 220
-const REMOTE_MENU_HEIGHT = 243
-const SETUP_MENU_HEIGHT = 166
+const MENU_ITEM_HEIGHT = 34
+const MENU_SEPARATOR_HEIGHT = 9
+const MENU_BODY_HEIGHT = 14
+
+interface MenuLayoutEntry {
+  kind: 'item' | 'separator'
+  remoteOnly?: boolean
+  autostartOnly?: boolean
+}
+
+// 与 menu.html 的可见项保持一致；高度按实际可见项计算，保证最后一项完整可见。
+const MENU_LAYOUT: readonly MenuLayoutEntry[] = [
+  { kind: 'item', remoteOnly: true }, // 切换服务器
+  { kind: 'item', remoteOnly: true }, // 重新加载
+  { kind: 'separator', remoteOnly: true },
+  { kind: 'item' }, // 检查更新
+  { kind: 'item' }, // 自动检查更新
+  { kind: 'item', autostartOnly: true }, // 随系统启动
+  { kind: 'separator' },
+  { kind: 'item' }, // 关于
+  { kind: 'separator' },
+  { kind: 'item' }, // 退出
+]
 
 let activeMenu: BrowserWindow | null = null
-let menuAutoCheckUpdate = true
+let menuChecks: Partial<Record<ApplicationMenuAction, boolean>> = {}
+let menuStartupEntryVisible = false
 
 export interface MenuActions {
   switchServer(): void
   reload(): void
   checkUpdate(): void
   toggleAutoCheck(): void
+  toggleAutostart(): void
+}
+
+export interface ApplicationMenuOptions {
+  remoteMode: boolean
+  autoCheckUpdate: boolean
+  startupEntryVisible: boolean
+  startupEntryEnabled: boolean
+}
+
+export function applicationMenuHeight(remoteMode: boolean, startupEntryVisible: boolean): number {
+  return MENU_LAYOUT.reduce((height, entry) => {
+    if (entry.remoteOnly && !remoteMode) return height
+    if (entry.autostartOnly && !startupEntryVisible) return height
+    return height + (entry.kind === 'item' ? MENU_ITEM_HEIGHT : MENU_SEPARATOR_HEIGHT)
+  }, MENU_BODY_HEIGHT)
 }
 
 export function disableApplicationMenu(): void {
@@ -26,7 +64,7 @@ export function disableApplicationMenu(): void {
 export function registerApplicationMenuIpc(actions: MenuActions): void {
   ipcMain.handle(MENU_CHANNELS.getState, (event) => {
     assertMenuSender(event.sender)
-    return { autoCheckUpdate: menuAutoCheckUpdate }
+    return { checks: menuChecks }
   })
 
   ipcMain.handle(MENU_CHANNELS.execute, (event, input: unknown) => {
@@ -39,7 +77,10 @@ export function registerApplicationMenuIpc(actions: MenuActions): void {
     else if (action === 'reload') actions.reload()
     else if (action === 'check-update') actions.checkUpdate()
     else if (action === 'toggle-auto-check') actions.toggleAutoCheck()
-    else if (action === 'quit') app.quit()
+    else if (action === 'toggle-autostart') {
+      // 主进程是权威：菜单未暴露该项时（开发模式或非 Windows），伪造的动作不产生任何系统写入。
+      if (menuStartupEntryVisible) actions.toggleAutostart()
+    } else if (action === 'quit') app.quit()
     else if (parent && !parent.isDestroyed()) {
       void dialog.showMessageBox(parent, {
         type: 'info',
@@ -59,12 +100,15 @@ export function registerApplicationMenuIpc(actions: MenuActions): void {
 export function showApplicationMenu(
   window: BrowserWindow,
   position: WindowMenuPosition,
-  remoteMode: boolean,
-  autoCheckUpdate: boolean,
+  options: ApplicationMenuOptions,
 ): void {
   closeActiveMenu()
-  menuAutoCheckUpdate = autoCheckUpdate
-  const height = remoteMode ? REMOTE_MENU_HEIGHT : SETUP_MENU_HEIGHT
+  menuChecks = {
+    'toggle-auto-check': options.autoCheckUpdate,
+    'toggle-autostart': options.startupEntryVisible && options.startupEntryEnabled,
+  }
+  menuStartupEntryVisible = options.startupEntryVisible
+  const height = applicationMenuHeight(options.remoteMode, options.startupEntryVisible)
   const parentBounds = window.getBounds()
   const workArea = screen.getDisplayMatching(parentBounds).workArea
   const preferredX = parentBounds.x + position.x - MENU_WIDTH
@@ -111,7 +155,10 @@ export function showApplicationMenu(
     if (activeMenu === menu) activeMenu = null
   })
   void menu.loadFile(path.join(currentDirectory, '..', 'renderer', 'menu.html'), {
-    query: { mode: remoteMode ? 'remote' : 'setup' },
+    query: {
+      mode: options.remoteMode ? 'remote' : 'setup',
+      autostart: options.startupEntryVisible ? '1' : '0',
+    },
   })
 }
 
@@ -128,6 +175,7 @@ function normalizeMenuAction(input: unknown): ApplicationMenuAction {
     input === 'reload' ||
     input === 'check-update' ||
     input === 'toggle-auto-check' ||
+    input === 'toggle-autostart' ||
     input === 'about' ||
     input === 'quit'
   ) {
