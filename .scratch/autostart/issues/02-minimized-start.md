@@ -22,6 +22,6 @@
 - `src/main/windows.ts`：新增 `WindowPresentation`（normal / autostart）。窗口仍以 `show: false` 创建，`ready-to-show` 时先恢复记录的最大化状态，再按呈现方式处理：autostart 走 `showInactive()` + `minimize()`，普通模式仍 `show()`。配置窗口与远程窗口共用该机制。
 - `src/main/main.ts`：启动流程（首次无配置、远程加载失败切配置页）把 autostart 呈现传给 `showSetup`；用户从菜单「切换服务器」打开配置页、从配置页取消返回远程都保持 normal。关闭窗口、`window-all-closed`、`before-quit` 未改动。
 - 测试：`src/main/startup-args.test.ts` 覆盖精确匹配、参数共存与近似值；e2e 的 `launch` helper 增加追加参数能力，覆盖最小化且不聚焦、恢复后尺寸、最大化恢复、服务器不可达时配置页最小化、用户切换服务器正常显示、关闭窗口退出进程。
-- 校验：`npm run typecheck`、`npm test`（145 passed）、`PYTHON=... npm run test:e2e`（7 passed，Windows 本机）通过。实现无平台分支，Linux CI 复用同一套 e2e 断言。
+- 校验：`npm run typecheck`、`npm test`（158 passed）、`PYTHON=... npm run test:e2e`（8 passed，Windows 本机）通过。实现无平台分支，Linux CI 复用同一套 e2e 断言。
 
-已知边界：以 `--autostart` 启动的会话在配置页保存服务器后会走既有 `app.relaunch()`，新进程沿用原命令行（含 `--autostart`），因此仍会最小化出现；本票未改动该既有重启路径。
+已知边界：以 `--autostart` 启动的会话在配置页保存服务器后会走既有 `app.relaunch()`。重启属于用户操作，`relaunchArguments` 会剥离 `--autostart`，新进程按普通方式呈现（修复提交 `0ca399f`），避免保存服务器后窗口再次最小化。
