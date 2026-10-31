@@ -138,6 +138,8 @@ export function showApplicationMenu(
       webSecurity: true,
     },
   })
+  // 非可调整窗口在 Windows 上会按非客户区再调整高度；锁定内容尺寸，保证按可见项算出的高度就是页面高度。
+  menu.setContentSize(MENU_WIDTH, height)
   activeMenu = menu
   menu.once('ready-to-show', () => {
     if (menu.isDestroyed()) return
