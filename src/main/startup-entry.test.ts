@@ -5,6 +5,7 @@ import {
   StartupEntryManager,
   createElectronStartupEntryBackend,
   isStartupEntrySupported,
+  reconcileStartupEntry,
   type StartupEntry,
   type StartupEntryBackend,
 } from './startup-entry.js'
@@ -198,6 +199,50 @@ describe('StartupEntryManager', () => {
     expect(logger.warn).toHaveBeenCalledWith('startup_entry_write_failed', {
       operation: 'reconcile',
       message: 'denied',
+    })
+  })
+})
+
+describe('reconcileStartupEntry', () => {
+  it('repairs a drifted entry at startup, keeps its arguments and logs the self-heal', () => {
+    const backend = new FakeBackend()
+    backend.entry = {
+      enabled: true,
+      path: 'D:\\Old Location\\Celery Web Speak.exe',
+      args: ['--autostart', '--portable'],
+    }
+    const { startup, logger } = createManager(backend)
+
+    reconcileStartupEntry(startup, logger)
+
+    expect(backend.writes).toEqual([{ path: EXECUTABLE, args: ['--autostart', '--portable'] }])
+    expect(backend.removals).toBe(0)
+    expect(logger.info).toHaveBeenCalledWith('startup_entry_reconciled', {
+      from: 'D:\\Old Location\\Celery Web Speak.exe',
+      to: EXECUTABLE,
+    })
+    expect(logger.warn).not.toHaveBeenCalled()
+  })
+
+  it('does nothing at startup when the entry manager is unavailable', () => {
+    const logger = { warn: vi.fn() }
+
+    expect(() => reconcileStartupEntry(null, logger)).not.toThrow()
+    expect(logger.warn).not.toHaveBeenCalled()
+  })
+
+  it('keeps startup running and logs when reconciliation throws unexpectedly', () => {
+    const logger = { warn: vi.fn() }
+    const startup = {
+      reconcilePath(): void {
+        throw new Error('registry unavailable')
+      },
+    }
+
+    expect(() => reconcileStartupEntry(startup, logger)).not.toThrow()
+    expect(logger.warn).toHaveBeenCalledWith('startup_entry_write_failed', {
+      operation: 'reconcile',
+      message: 'registry unavailable',
     })
   })
 })
