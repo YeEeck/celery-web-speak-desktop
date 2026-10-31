@@ -33,7 +33,7 @@ Chromium 不能可靠地只捕获选定 Windows 应用窗口的音频。Electron
 
 - 不在 Electron Main 进程中直接加载采集模块。
 - 不分发独立 helper.exe。
-- 不安装驱动、虚拟声卡、系统服务或开机启动项。
+- 不安装驱动、虚拟声卡或系统服务；随系统启动仅登记当前用户启动条目，不引入后台常驻进程。
 - 不注入或 Hook 目标进程。
 - 不使用全系统 loopback 作为失败回退。
 - 不在桌面 Main 或 utilityProcess 中连接 LiveKit。
