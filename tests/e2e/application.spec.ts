@@ -57,6 +57,7 @@ test('首次启动显示可用的服务器配置窗口', async () => {
     const menuPage = await localWindow(application, 'menu.html')
     await expect(menuPage.getByRole('menuitem', { name: '关于 Celery Web Speak' })).toBeVisible()
     await expect(menuPage.getByRole('menuitem', { name: '切换服务器' })).toHaveCount(0)
+    await expectMenuFitsViewport(menuPage)
     await expect(menuPage.locator('body')).toHaveCSS('background-color', 'rgb(17, 18, 20)')
     expect(await menuPage.locator('.menu-item').first().evaluate((element) => element === document.activeElement)).toBe(false)
     await expect(menuPage.locator('.menu-item').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
@@ -125,6 +126,7 @@ test('当前 HTTP Origin 是安全上下文并自动取得麦克风', async () =
     const menuPage = await localWindow(application, 'menu.html')
     await expect(menuPage.getByRole('menuitem', { name: '切换服务器' })).toBeVisible()
     await expect(menuPage.getByRole('menuitem', { name: '重新加载 Ctrl+R' })).toBeVisible()
+    await expectMenuFitsViewport(menuPage)
     await expect(menuPage.locator('body')).toHaveCSS('background-color', 'rgb(17, 18, 20)')
     expect(await menuPage.locator('.menu-item').first().evaluate((element) => element === document.activeElement)).toBe(false)
     await expect(menuPage.locator('.menu-item').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
@@ -580,6 +582,25 @@ interface MainWindowState {
   maximized: boolean
   bounds: { x: number; y: number; width: number; height: number }
   normalBounds: { x: number; y: number; width: number; height: number }
+}
+
+async function expectMenuFitsViewport(page: Page): Promise<void> {
+  const metrics = await page.evaluate(() => {
+    const items = [...document.querySelectorAll('.menu-item')]
+      .filter((item) => getComputedStyle(item).display !== 'none')
+    const last = items.at(-1)
+    if (!last) throw new Error('menu has no visible items')
+    const rect = last.getBoundingClientRect()
+    const body = getComputedStyle(document.body)
+    return {
+      bottom: rect.bottom,
+      viewport: window.innerHeight,
+      bottomInset: parseFloat(body.paddingBottom) + parseFloat(body.borderBottomWidth),
+    }
+  })
+  // 最后一项完整可见，且底部只留 body 的内边距/边框，没有被裁切或多余空白。
+  expect(metrics.bottom).toBeLessThanOrEqual(metrics.viewport)
+  expect(metrics.viewport - metrics.bottom).toBeCloseTo(metrics.bottomInset, 0)
 }
 
 const STARTUP_RUN_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
