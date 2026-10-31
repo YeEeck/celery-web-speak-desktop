@@ -1,9 +1,11 @@
 import path from 'node:path'
 import { app } from 'electron'
 import type { Logger } from './logger.js'
+import { AUTOSTART_FLAG } from './startup-args.js'
+import { STARTUP_ENTRY_NAME } from '../shared/startup-entry-api.js'
 
-export const STARTUP_ENTRY_NAME = 'Celery Web Speak'
-export const STARTUP_ENTRY_ARGS: readonly string[] = ['--autostart']
+export { STARTUP_ENTRY_NAME } from '../shared/startup-entry-api.js'
+export const STARTUP_ENTRY_ARGS: readonly string[] = [AUTOSTART_FLAG]
 
 export interface StartupEntry {
   enabled: boolean
@@ -86,7 +88,7 @@ export class StartupEntryManager {
     if (sameWindowsPath(entry.path, this.currentExecutable)) return
 
     try {
-      this.backend.write(this.currentExecutable, [...entry.args])
+      this.backend.write(this.currentExecutable, withStartupArgs(entry.args))
     } catch (error) {
       this.logger.warn('startup_entry_write_failed', {
         operation: 'reconcile',
@@ -116,6 +118,7 @@ interface StartupLoginItem {
   name: string
   path: string
   args: string[]
+  scope: 'user' | 'machine'
   enabled: boolean
 }
 
@@ -132,11 +135,17 @@ export interface LoginItemSettingsApi {
 
 /**
  * 生产后端：按固定条目名读取登录项列表，写入时同时恢复 StartupApproved 启用状态。
+ * 只看当前用户（HKCU）的条目：机器级（HKLM）同名声明的条目不属于本应用。
+ * 注意 launchItems 的 args 不含开关型参数（--autostart 会被 Chromium 当作 switch），
+ * 写入方始终用 STARTUP_ENTRY_ARGS，读取方不能把它当成条目参数的完整快照。
  */
 export function createElectronStartupEntryBackend(api: LoginItemSettingsApi = app): StartupEntryBackend {
   return {
     read() {
-      const item = api.getLoginItemSettings().launchItems.find((candidate) => candidate.name === STARTUP_ENTRY_NAME)
+      const item = api
+        .getLoginItemSettings()
+        .launchItems
+        .find((candidate) => candidate.name === STARTUP_ENTRY_NAME && candidate.scope === 'user')
       if (!item) return { enabled: false, path: null, args: [] }
       return { enabled: item.enabled, path: item.path, args: [...item.args] }
     },
@@ -189,6 +198,19 @@ export function reconcileStartupEntry(
       message: errorMessage(error),
     })
   }
+}
+
+/**
+ * 启动条目由本应用拥有，固定启动参数必须留在条目里。Electron 的 launchItems
+ * 不回传开关型参数（Chromium 把 --autostart 当作 switch），读回值可能为空；
+ * 改写路径时补回，避免自愈把“登录拉起”的标记丢掉。
+ */
+function withStartupArgs(reported: readonly string[]): string[] {
+  const args = [...reported]
+  for (const argument of STARTUP_ENTRY_ARGS) {
+    if (!args.includes(argument)) args.push(argument)
+  }
+  return args
 }
 
 function sameWindowsPath(left: string, right: string): boolean {

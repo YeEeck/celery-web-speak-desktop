@@ -188,6 +188,21 @@ describe('StartupEntryManager', () => {
     })
   })
 
+  it('keeps the startup argument when the operating system reports no arguments', () => {
+    // Electron 的 launchItems 不回传开关型参数，生产环境读回 --autostart 为空。
+    const backend = new FakeBackend()
+    backend.entry = { enabled: true, path: 'D:\\Old Location\\Celery Web Speak.exe', args: [] }
+    const { startup, logger } = createManager(backend)
+
+    startup.reconcilePath()
+
+    expect(backend.writes).toEqual([{ path: EXECUTABLE, args: ['--autostart'] }])
+    expect(logger.info).toHaveBeenCalledWith('startup_entry_reconciled', {
+      from: 'D:\\Old Location\\Celery Web Speak.exe',
+      to: EXECUTABLE,
+    })
+  })
+
   it('does not throw when path reconciliation fails', () => {
     const backend = new FakeBackend()
     backend.entry = { enabled: true, path: 'D:\\Old\\Celery.exe', args: ['--autostart'] }
@@ -257,11 +272,12 @@ describe('createElectronStartupEntryBackend', () => {
     const backend = createElectronStartupEntryBackend({
       getLoginItemSettings: () => ({
         launchItems: [
-          { name: 'Another Application', path: 'D:\\Other.exe', args: [], enabled: true },
+          { name: 'Another Application', path: 'D:\\Other.exe', args: [], scope: 'user', enabled: true },
           {
             name: STARTUP_ENTRY_NAME,
             path: EXECUTABLE,
             args: ['--autostart'],
+            scope: 'user',
             enabled: false,
           },
         ],
@@ -270,6 +286,32 @@ describe('createElectronStartupEntryBackend', () => {
     })
 
     expect(backend.read()).toEqual({ enabled: false, path: EXECUTABLE, args: ['--autostart'] })
+  })
+
+  it('ignores a machine-scope entry that happens to use the same name', () => {
+    const backend = createElectronStartupEntryBackend({
+      getLoginItemSettings: () => ({
+        launchItems: [
+          {
+            name: STARTUP_ENTRY_NAME,
+            path: 'C:\\Machine Install\\Celery Web Speak.exe',
+            args: ['--autostart'],
+            scope: 'machine',
+            enabled: true,
+          },
+          {
+            name: STARTUP_ENTRY_NAME,
+            path: EXECUTABLE,
+            args: ['--autostart'],
+            scope: 'user',
+            enabled: true,
+          },
+        ],
+      }),
+      setLoginItemSettings: () => undefined,
+    })
+
+    expect(backend.read()).toEqual({ enabled: true, path: EXECUTABLE, args: ['--autostart'] })
   })
 
   it('returns an absent entry as disabled', () => {
