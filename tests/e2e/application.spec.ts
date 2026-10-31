@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { createServer, type Server } from 'node:http'
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,6 +11,7 @@ import {
   type ElectronApplication,
   type Page,
 } from '@playwright/test'
+import { STARTUP_ENTRY_NAME } from '../../src/shared/startup-entry-api.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -457,6 +459,53 @@ test('随系统启动：关闭窗口仍然立即退出应用', async () => {
   }
 })
 
+test('随系统启动：真实 Windows 启动条目写入、读取与删除（仅 Windows 本地）', async () => {
+  // CI 的 e2e 只在 Linux runner 上运行，Windows runner 只跑类型检查与单测，
+  // 因此本用例在 CI 中恒被跳过；它只用于 Windows 本地验证“写入 → 注册表 → 系统可读”的真实链路，
+  // 而不是把未覆盖的链路伪装成已覆盖。
+  test.skip(process.platform !== 'win32', '仅在 Windows 本地验证真实启动条目')
+  // 本机已有真实启动条目时跳过：不为了一次测试改动开发者自己的设置。
+  test.skip(startupEntryExists(), `本机已存在 ${STARTUP_ENTRY_NAME} 启动值，跳过以免覆盖`)
+
+  const userData = await mkdtemp(path.join(tmpdir(), 'cws-electron-e2e-'))
+  const application = await launch(userData)
+  try {
+    const executable = await application.evaluate(({ app }, name) => {
+      app.setLoginItemSettings({
+        openAtLogin: true,
+        name,
+        path: app.getPath('exe'),
+        args: ['--autostart'],
+        enabled: true,
+      })
+      return app.getPath('exe')
+    }, STARTUP_ENTRY_NAME)
+
+    const written = await application.evaluate(({ app }, name) => (
+      app.getLoginItemSettings().launchItems.find((item) => item.name === name && item.scope === 'user') ?? null
+    ), STARTUP_ENTRY_NAME)
+    expect(written?.path).toBe(executable)
+    expect(written?.enabled).toBe(true)
+    // Chromium 把 --autostart 当开关解析，launchItems.args 不回传它；直接查注册表验证真实命令行。
+    expect(startupRegistryValue()).toContain('--autostart')
+
+    await application.evaluate(({ app }, name) => {
+      app.setLoginItemSettings({ openAtLogin: false, name })
+    }, STARTUP_ENTRY_NAME)
+
+    const removed = await application.evaluate(({ app }, name) => (
+      app.getLoginItemSettings().launchItems.find((item) => item.name === name && item.scope === 'user') ?? null
+    ), STARTUP_ENTRY_NAME)
+    expect(removed).toBeNull()
+    expect(startupEntryExists()).toBe(false)
+  } finally {
+    await application.evaluate(({ app }, name) => {
+      app.setLoginItemSettings({ openAtLogin: false, name })
+    }, STARTUP_ENTRY_NAME).catch(() => undefined)
+    await application.close()
+  }
+})
+
 async function remoteEvaluate(
   application: ElectronApplication,
   serverUrl: string,
@@ -531,6 +580,21 @@ interface MainWindowState {
   maximized: boolean
   bounds: { x: number; y: number; width: number; height: number }
   normalBounds: { x: number; y: number; width: number; height: number }
+}
+
+const STARTUP_RUN_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
+
+function startupEntryExists(): boolean {
+  try {
+    execFileSync('reg', ['query', STARTUP_RUN_KEY, '/v', STARTUP_ENTRY_NAME], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+}
+
+function startupRegistryValue(): string {
+  return execFileSync('reg', ['query', STARTUP_RUN_KEY, '/v', STARTUP_ENTRY_NAME], { encoding: 'latin1' })
 }
 
 async function writeConfig(
