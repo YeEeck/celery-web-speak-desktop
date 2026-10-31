@@ -16,8 +16,9 @@ interface MenuLayoutEntry {
   autostartOnly?: boolean
 }
 
-// 与 menu.html 的可见项保持一致；高度按实际可见项计算，保证最后一项完整可见。
-const MENU_LAYOUT: readonly MenuLayoutEntry[] = [
+// 与 menu.html 的可见项保持一致（menu.test.ts 会校验两者结构相同）；
+// 高度按实际可见项计算，保证最后一项完整可见。
+export const MENU_LAYOUT: readonly MenuLayoutEntry[] = [
   { kind: 'item', remoteOnly: true }, // 切换服务器
   { kind: 'item', remoteOnly: true }, // 重新加载
   { kind: 'separator', remoteOnly: true },
@@ -77,10 +78,8 @@ export function registerApplicationMenuIpc(actions: MenuActions): void {
     else if (action === 'reload') actions.reload()
     else if (action === 'check-update') actions.checkUpdate()
     else if (action === 'toggle-auto-check') actions.toggleAutoCheck()
-    else if (action === 'toggle-autostart') {
-      // 主进程是权威：菜单未暴露该项时（开发模式或非 Windows），伪造的动作不产生任何系统写入。
-      if (menuStartupEntryVisible) actions.toggleAutostart()
-    } else if (action === 'quit') app.quit()
+    else if (action === 'toggle-autostart') actions.toggleAutostart()
+    else if (action === 'quit') app.quit()
     else if (parent && !parent.isDestroyed()) {
       void dialog.showMessageBox(parent, {
         type: 'info',
@@ -172,12 +171,17 @@ function assertMenuSender(sender: Electron.WebContents): BrowserWindow {
 }
 
 function normalizeMenuAction(input: unknown): ApplicationMenuAction {
+  if (input === 'toggle-autostart') {
+    // 开发模式与非 Windows 下菜单不暴露该项，动作白名单直接拒绝；
+    // 即使渲染层伪造该动作，主进程也不会产生任何系统写入。
+    if (!menuStartupEntryVisible) throw new Error('Unknown application menu action')
+    return input
+  }
   if (
     input === 'switch-server' ||
     input === 'reload' ||
     input === 'check-update' ||
     input === 'toggle-auto-check' ||
-    input === 'toggle-autostart' ||
     input === 'about' ||
     input === 'quit'
   ) {
