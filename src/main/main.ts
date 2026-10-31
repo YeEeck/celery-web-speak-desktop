@@ -14,7 +14,7 @@ import { isAutostartLaunch, relaunchArguments } from './startup-args.js'
 import { ApplicationAudioCoordinator } from './application-audio.js'
 import { VoiceOverlayCoordinator } from './voice-overlay.js'
 import { UpdateChecker } from './update-checker.js'
-import { createStartupEntry, type StartupEntryManager } from './startup-entry.js'
+import { createStartupEntry, reconcileStartupEntry, type StartupEntryManager } from './startup-entry.js'
 import { SETUP_CHANNELS, type SetupSaveRequest, type SetupState } from '../shared/setup-api.js'
 import { WINDOW_CHANNELS, type WindowMenuPosition } from '../shared/window-api.js'
 import { UPDATE_CHANNELS } from '../shared/update-api.js'
@@ -103,6 +103,9 @@ async function initialize(): Promise<void> {
     },
   })
   disableApplicationMenu()
+
+  // 初始化完成、窗口创建前核对一次：条目跟随当前可执行文件，其余情况不写
+  reconcileStartupEntry(startupEntry, logger)
 
   const config = await store.load()
   if (config) showRemote(config, startupPresentation)

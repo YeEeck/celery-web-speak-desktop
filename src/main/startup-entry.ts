@@ -171,6 +171,26 @@ export function createStartupEntry(logger: Pick<Logger, 'info' | 'warn'>): Start
   })
 }
 
+/**
+ * 启动时的一次性路径核对，在应用初始化完成后、窗口创建前调用。
+ * 管理器在开发模式与非 Windows 下为 null，此时不读不写；
+ * 核对自身意外抛错也只留一条日志，绝不能让应用启动失败。
+ */
+export function reconcileStartupEntry(
+  startupEntry: Pick<StartupEntryManager, 'reconcilePath'> | null,
+  logger: Pick<Logger, 'warn'>,
+): void {
+  if (startupEntry === null) return
+  try {
+    startupEntry.reconcilePath()
+  } catch (error) {
+    logger.warn('startup_entry_write_failed', {
+      operation: 'reconcile',
+      message: errorMessage(error),
+    })
+  }
+}
+
 function sameWindowsPath(left: string, right: string): boolean {
   return normalizeWindowsPath(left) === normalizeWindowsPath(right)
 }
