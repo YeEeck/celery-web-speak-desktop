@@ -20,6 +20,12 @@ const TITLE_BAR_HEIGHT = 32
 // 打包后由 electron-builder 处理图标，仅开发模式手动指定
 const windowIcon = app.isPackaged ? undefined : path.join(currentDirectory, '..', '..', 'build', 'icons', 'icon.png')
 
+/**
+ * 窗口的呈现方式。autostart 用于启动条目拉起的会话：显示后立即最小化，
+ * 不抢焦点。普通启动与用户主动打开的窗口保持原有呈现。
+ */
+export type WindowPresentation = 'normal' | 'autostart'
+
 export interface WindowCallbacks {
   onRemoteClosed(): void
   onRemoteLoadFailed(message: string): void
@@ -36,7 +42,7 @@ export interface RemoteBinding {
   serverUrl: string
 }
 
-export function createSetupWindow(): BrowserWindow {
+export function createSetupWindow(presentation: WindowPresentation): BrowserWindow {
   const window = new BrowserWindow({
     title: 'Celery Web Speak',
     ...(windowIcon && { icon: windowIcon }),
@@ -55,7 +61,7 @@ export function createSetupWindow(): BrowserWindow {
       webSecurity: true,
     },
   })
-  window.once('ready-to-show', () => window.show())
+  window.once('ready-to-show', () => presentWindow(window, presentation))
   void window.loadFile(path.join(currentDirectory, '..', 'renderer', 'setup.html'))
   return window
 }
@@ -65,6 +71,7 @@ export function createRemoteWindow(
   store: ConfigStore,
   packaged: boolean,
   callbacks: WindowCallbacks,
+  presentation: WindowPresentation,
 ): RemoteWindow {
   const displays: Rectangle[] = screen.getAllDisplays().map((display) => display.bounds)
   const bounds = visibleWindowBounds(config.window, displays)
@@ -118,8 +125,12 @@ export function createRemoteWindow(
   window.on('resize', layoutRemoteView)
 
   configureNavigationPolicy(remoteView.webContents, config.serverUrl, packaged)
-  if (config.window.maximized) window.maximize()
-  window.once('ready-to-show', () => window.show())
+  // 顺序固定为“恢复尺寸（含最大化）→ 显示 → 最小化”：先最大化再最小化，
+  // 用户从任务栏恢复时看到的才是上次的窗口状态，而不是默认尺寸。
+  window.once('ready-to-show', () => {
+    if (config.window.maximized) window.maximize()
+    presentWindow(window, presentation)
+  })
 
   let closing = false
   window.on('close', (event) => {
@@ -147,6 +158,15 @@ export function createRemoteWindow(
   void window.loadFile(path.join(currentDirectory, '..', 'renderer', 'shell.html'))
   void remoteView.webContents.loadURL(config.serverUrl)
   return { window, webContents: remoteView.webContents }
+}
+
+function presentWindow(window: BrowserWindow, presentation: WindowPresentation): void {
+  if (presentation === 'autostart') {
+    window.showInactive()
+    window.minimize()
+    return
+  }
+  window.show()
 }
 
 async function persistWindowState(window: BrowserWindow, store: ConfigStore): Promise<void> {
