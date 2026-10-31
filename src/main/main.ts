@@ -10,7 +10,7 @@ import { Logger } from './logger.js'
 import { disableApplicationMenu, registerApplicationMenuIpc, showApplicationMenu } from './menu.js'
 import { validateServer } from './server-validator.js'
 import { createRemoteWindow, createSetupWindow, type WindowPresentation } from './windows.js'
-import { isAutostartLaunch } from './startup-args.js'
+import { isAutostartLaunch, relaunchArguments } from './startup-args.js'
 import { ApplicationAudioCoordinator } from './application-audio.js'
 import { VoiceOverlayCoordinator } from './voice-overlay.js'
 import { UpdateChecker } from './update-checker.js'
@@ -290,7 +290,7 @@ function normalizeMenuPosition(input: unknown, window: BrowserWindow): WindowMen
 }
 
 function relaunchApplication(): void {
-  app.relaunch()
+  app.relaunch({ args: relaunchArguments(process.argv) })
   app.exit(0)
 }
 

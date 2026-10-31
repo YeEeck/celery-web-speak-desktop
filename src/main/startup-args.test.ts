@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AUTOSTART_FLAG, isAutostartLaunch } from './startup-args.js'
+import { AUTOSTART_FLAG, isAutostartLaunch, relaunchArguments } from './startup-args.js'
 
 describe('isAutostartLaunch', () => {
   it('recognizes the exact flag', () => {
@@ -37,5 +37,22 @@ describe('isAutostartLaunch', () => {
 
   it('exposes the argument written by the startup entry', () => {
     expect(AUTOSTART_FLAG).toBe('--autostart')
+  })
+})
+
+describe('relaunchArguments', () => {
+  it('drops the startup entry flag so a user-initiated relaunch presents normally', () => {
+    expect(relaunchArguments(['C:\\App\\Celery Web Speak.exe', '--autostart'])).toEqual([])
+    expect(relaunchArguments(['electron.exe', '.', '--autostart', '--foo'])).toEqual(['.', '--foo'])
+  })
+
+  it('keeps the arguments a normal launch passed', () => {
+    expect(relaunchArguments(['electron.exe', '.'])).toEqual(['.'])
+    expect(relaunchArguments(['C:\\App\\Celery Web Speak.exe'])).toEqual([])
+  })
+
+  it('does not touch lookalike arguments', () => {
+    expect(relaunchArguments(['app.exe', '--autostart=1', '--no-autostart']))
+      .toEqual(['--autostart=1', '--no-autostart'])
   })
 })

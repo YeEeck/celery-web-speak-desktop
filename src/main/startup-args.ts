@@ -8,3 +8,11 @@ export const AUTOSTART_FLAG = '--autostart'
 export function isAutostartLaunch(argv: readonly string[]): boolean {
   return argv.some((argument) => argument === AUTOSTART_FLAG)
 }
+
+/**
+ * 重启应用时的命令行参数：配置页保存服务器后的重启是用户操作，
+ * 不应沿用启动条目写入的 --autostart，否则新进程会再次最小化出现。
+ */
+export function relaunchArguments(argv: readonly string[]): string[] {
+  return argv.slice(1).filter((argument) => argument !== AUTOSTART_FLAG)
+}
