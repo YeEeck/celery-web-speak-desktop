@@ -4,7 +4,6 @@ import type { Logger } from './logger.js'
 import { AUTOSTART_FLAG } from './startup-args.js'
 import { STARTUP_ENTRY_NAME } from '../shared/startup-entry-api.js'
 
-export { STARTUP_ENTRY_NAME } from '../shared/startup-entry-api.js'
 export const STARTUP_ENTRY_ARGS: readonly string[] = [AUTOSTART_FLAG]
 
 export interface StartupEntry {

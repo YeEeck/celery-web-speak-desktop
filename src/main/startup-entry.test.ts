@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   STARTUP_ENTRY_ARGS,
-  STARTUP_ENTRY_NAME,
   StartupEntryManager,
   createElectronStartupEntryBackend,
   isStartupEntrySupported,
@@ -9,6 +8,7 @@ import {
   type StartupEntry,
   type StartupEntryBackend,
 } from './startup-entry.js'
+import { STARTUP_ENTRY_NAME } from '../shared/startup-entry-api.js'
 
 const EXECUTABLE = 'C:\\Program Files\\Celery Web Speak\\Celery Web Speak.exe'
 
