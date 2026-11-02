@@ -80,7 +80,12 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - name: Electron 集成测试
-        run: xvfb-run -a npm run test:e2e
+        # Xvfb 默认没有窗口管理器，minimize/maximize 只会在有 WM 时生效；
+        # 启动 openbox，让"登录拉起最小化"的 e2e 断言在 Linux 上也能验证。
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends openbox
+          xvfb-run -a bash -c 'openbox & sleep 2; npm run test:e2e'
       - run: npm run package:linux
       - name: 验证打包后的应用音频工作进程握手
         run: CWS_PACKAGED_RESOURCES="$PWD/release/linux-unpacked/resources" xvfb-run -a npx electron --no-sandbox scripts/verify-application-audio-worker.mjs
