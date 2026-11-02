@@ -1,4 +1,4 @@
-export type ApplicationMenuAction = 'switch-server' | 'reload' | 'check-update' | 'toggle-auto-check' | 'about' | 'quit'
+export type ApplicationMenuAction = 'switch-server' | 'reload' | 'check-update' | 'toggle-auto-check' | 'toggle-autostart' | 'about' | 'quit'
 
 export const MENU_CHANNELS = {
   execute: 'menu:execute',
@@ -7,5 +7,5 @@ export const MENU_CHANNELS = {
 } as const
 
 export interface MenuState {
-  autoCheckUpdate: boolean
+  checks: Partial<Record<ApplicationMenuAction, boolean>>
 }

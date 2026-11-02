@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { createServer, type Server } from 'node:http'
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,6 +11,8 @@ import {
   type ElectronApplication,
   type Page,
 } from '@playwright/test'
+import { STARTUP_ENTRY_NAME } from '../../src/shared/startup-entry-api.js'
+import { readStartupEntry } from '../../src/main/startup-entry-registry.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -19,6 +22,9 @@ test('首次启动显示可用的服务器配置窗口', async () => {
   try {
     const page = await localWindow(application, 'setup.html')
     await expect(page.getByRole('heading', { name: '连接服务器' })).toBeVisible()
+    await expect.poll(async () => (await mainWindowState(application, 'setup.html'))?.visible).toBe(true)
+    const setupWindowState = await mainWindowState(application, 'setup.html')
+    expect(setupWindowState?.minimized).toBe(false)
     await expect(page.getByLabel('服务器地址')).toBeFocused()
     await expect(page.getByRole('button', { name: '最小化窗口' })).toBeVisible()
     await expect(page.getByRole('button', { name: '最大化窗口' })).toBeVisible()
@@ -52,6 +58,7 @@ test('首次启动显示可用的服务器配置窗口', async () => {
     const menuPage = await localWindow(application, 'menu.html')
     await expect(menuPage.getByRole('menuitem', { name: '关于 Celery Web Speak' })).toBeVisible()
     await expect(menuPage.getByRole('menuitem', { name: '切换服务器' })).toHaveCount(0)
+    await expectMenuFitsViewport(menuPage)
     await expect(menuPage.locator('body')).toHaveCSS('background-color', 'rgb(17, 18, 20)')
     expect(await menuPage.locator('.menu-item').first().evaluate((element) => element === document.activeElement)).toBe(false)
     await expect(menuPage.locator('.menu-item').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
@@ -88,6 +95,8 @@ test('当前 HTTP Origin 是安全上下文并自动取得麦克风', async () =
   try {
     const page = await localWindow(application, 'shell.html')
     await expect(page.getByRole('button', { name: '打开应用菜单' })).toBeVisible()
+    await expect.poll(async () => (await mainWindowState(application, 'shell.html'))?.visible).toBe(true)
+    expect((await mainWindowState(application, 'shell.html'))?.minimized).toBe(false)
     const updateButton = page.getByRole('button', { name: '新版本' })
     await expect(updateButton).toBeHidden()
 
@@ -118,6 +127,7 @@ test('当前 HTTP Origin 是安全上下文并自动取得麦克风', async () =
     const menuPage = await localWindow(application, 'menu.html')
     await expect(menuPage.getByRole('menuitem', { name: '切换服务器' })).toBeVisible()
     await expect(menuPage.getByRole('menuitem', { name: '重新加载 Ctrl+R' })).toBeVisible()
+    await expectMenuFitsViewport(menuPage)
     await expect(menuPage.locator('body')).toHaveCSS('background-color', 'rgb(17, 18, 20)')
     expect(await menuPage.locator('.menu-item').first().evaluate((element) => element === document.activeElement)).toBe(false)
     await expect(menuPage.locator('.menu-item').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
@@ -349,6 +359,153 @@ test('语音浮层：握手、启停、状态渲染与销毁', async () => {
   }
 })
 
+test('随系统启动：窗口最小化且不抢焦点，恢复后保持记录尺寸', async () => {
+  const server = await startMediaServer()
+  const address = server.address()
+  if (!address || typeof address === 'string') throw new Error('test server did not bind to TCP')
+  const serverUrl = `http://127.0.0.1:${address.port}`
+  const userData = await mkdtemp(path.join(tmpdir(), 'cws-electron-e2e-'))
+  await writeConfig(userData, serverUrl, { width: 1180, height: 760, x: null, y: null, maximized: false })
+
+  const application = await launch(userData, {}, ['--autostart'])
+  try {
+    await localWindow(application, 'shell.html')
+    await expect.poll(async () => (await mainWindowState(application, 'shell.html'))?.minimized).toBe(true)
+    const minimized = await mainWindowState(application, 'shell.html')
+    expect(minimized).not.toBeNull()
+    expect(minimized?.focused).toBe(false)
+    expect(minimized?.focusedWindowId).not.toBe(minimized?.id)
+
+    await restoreMainWindow(application, 'shell.html')
+    await expect.poll(async () => (await mainWindowState(application, 'shell.html'))?.minimized).toBe(false)
+    const restored = await mainWindowState(application, 'shell.html')
+    expect(restored?.maximized).toBe(false)
+    expect(restored?.bounds.width).toBe(1180)
+    expect(restored?.bounds.height).toBe(760)
+
+    // 用户主动「切换服务器」属于用户操作，配置窗口必须恢复正常呈现。
+    const page = await localWindow(application, 'shell.html')
+    await page.getByRole('button', { name: '打开应用菜单' }).click()
+    const menuPage = await localWindow(application, 'menu.html')
+    await menuPage.getByRole('menuitem', { name: '切换服务器' }).click()
+    await localWindow(application, 'setup.html')
+    await expect.poll(async () => (await mainWindowState(application, 'setup.html'))?.visible).toBe(true)
+    expect((await mainWindowState(application, 'setup.html'))?.minimized).toBe(false)
+  } finally {
+    await application.close()
+    await closeServer(server)
+  }
+})
+
+test('随系统启动：上次最大化时恢复后仍最大化且保留记录的普通尺寸', async () => {
+  const server = await startMediaServer()
+  const address = server.address()
+  if (!address || typeof address === 'string') throw new Error('test server did not bind to TCP')
+  const serverUrl = `http://127.0.0.1:${address.port}`
+  const userData = await mkdtemp(path.join(tmpdir(), 'cws-electron-e2e-'))
+  await writeConfig(userData, serverUrl, { width: 1200, height: 780, x: null, y: null, maximized: true })
+
+  const application = await launch(userData, {}, ['--autostart'])
+  try {
+    await localWindow(application, 'shell.html')
+    await expect.poll(async () => (await mainWindowState(application, 'shell.html'))?.minimized).toBe(true)
+
+    await restoreMainWindow(application, 'shell.html')
+    await expect.poll(async () => (await mainWindowState(application, 'shell.html'))?.minimized).toBe(false)
+    const restored = await mainWindowState(application, 'shell.html')
+    expect(restored?.maximized).toBe(true)
+    expect(restored?.normalBounds.width).toBe(1200)
+    expect(restored?.normalBounds.height).toBe(780)
+  } finally {
+    await application.close()
+    await closeServer(server)
+  }
+})
+
+test('随系统启动且服务器不可达：配置窗口同样最小化', async () => {
+  const userData = await mkdtemp(path.join(tmpdir(), 'cws-electron-e2e-'))
+  await writeConfig(userData, 'http://127.0.0.1:1', { width: 1280, height: 800, x: null, y: null, maximized: false })
+
+  const application = await launch(userData, {}, ['--autostart'])
+  try {
+    await localWindow(application, 'setup.html')
+    await expect.poll(async () => (await mainWindowState(application, 'setup.html'))?.minimized).toBe(true)
+    const setupState = await mainWindowState(application, 'setup.html')
+    expect(setupState?.focused).toBe(false)
+    expect(setupState?.focusedWindowId).not.toBe(setupState?.id)
+  } finally {
+    await application.close()
+  }
+})
+
+test('随系统启动：关闭窗口仍然立即退出应用', async () => {
+  const server = await startMediaServer()
+  const address = server.address()
+  if (!address || typeof address === 'string') throw new Error('test server did not bind to TCP')
+  const serverUrl = `http://127.0.0.1:${address.port}`
+  const userData = await mkdtemp(path.join(tmpdir(), 'cws-electron-e2e-'))
+  await writeConfig(userData, serverUrl, { width: 1280, height: 800, x: null, y: null, maximized: false })
+
+  const application = await launch(userData, {}, ['--autostart'])
+  try {
+    const page = await localWindow(application, 'shell.html')
+    await expect.poll(async () => (await mainWindowState(application, 'shell.html'))?.minimized).toBe(true)
+    await restoreMainWindow(application, 'shell.html')
+    await expect.poll(async () => (await mainWindowState(application, 'shell.html'))?.minimized).toBe(false)
+
+    const closed = application.waitForEvent('close')
+    await page.getByRole('button', { name: '关闭窗口' }).click()
+    await closed
+  } finally {
+    await application.close().catch(() => undefined)
+    await closeServer(server)
+  }
+})
+
+test('随系统启动：真实 Windows 启动条目写入、读取与删除（仅 Windows 本地）', async () => {
+  // CI 的 e2e 只在 Linux runner 上运行，Windows runner 只跑类型检查与单测，
+  // 因此本用例在 CI 中恒被跳过；它只用于 Windows 本地验证“写入 → 注册表 → 系统可读”的真实链路，
+  // 而不是把未覆盖的链路伪装成已覆盖。
+  test.skip(process.platform !== 'win32', '仅在 Windows 本地验证真实启动条目')
+  // 本机已有真实启动条目时跳过：不为了一次测试改动开发者自己的设置。
+  test.skip(startupEntryExists(), `本机已存在 ${STARTUP_ENTRY_NAME} 启动值，跳过以免覆盖`)
+
+  const userData = await mkdtemp(path.join(tmpdir(), 'cws-electron-e2e-'))
+  const application = await launch(userData)
+  try {
+    const executable = await application.evaluate(({ app }, name) => {
+      app.setLoginItemSettings({
+        openAtLogin: true,
+        name,
+        path: app.getPath('exe'),
+        args: ['--autostart'],
+        enabled: true,
+      })
+      return app.getPath('exe')
+    }, STARTUP_ENTRY_NAME)
+
+    // 读取走生产代码的注册表读取路径（不再用 Electron 的 launchItems）。
+    await expect(readStartupEntry(STARTUP_ENTRY_NAME)).resolves.toEqual({
+      path: executable,
+      args: ['--autostart'],
+      enabled: true,
+    })
+    expect(startupRegistryValue()).toContain('--autostart')
+
+    await application.evaluate(({ app }, name) => {
+      app.setLoginItemSettings({ openAtLogin: false, name })
+    }, STARTUP_ENTRY_NAME)
+
+    await expect(readStartupEntry(STARTUP_ENTRY_NAME)).resolves.toBeNull()
+    expect(startupEntryExists()).toBe(false)
+  } finally {
+    await application.evaluate(({ app }, name) => {
+      app.setLoginItemSettings({ openAtLogin: false, name })
+    }, STARTUP_ENTRY_NAME).catch(() => undefined)
+    await application.close()
+  }
+})
+
 async function remoteEvaluate(
   application: ElectronApplication,
   serverUrl: string,
@@ -389,17 +546,134 @@ async function overlayWindowSize(application: ElectronApplication): Promise<{ wi
   })
 }
 
-async function launch(userData: string, extraEnv: Record<string, string> = {}): Promise<ElectronApplication> {
+async function launch(
+  userData: string,
+  extraEnv: Record<string, string> = {},
+  extraArgs: string[] = [],
+): Promise<ElectronApplication> {
   const environment = { ...process.env }
   delete environment.ELECTRON_RUN_AS_NODE
   return electron.launch({
-    args: [root],
+    args: [root, ...extraArgs],
     env: {
       ...environment,
       CWS_USER_DATA_DIR: userData,
       ...extraEnv,
     },
   })
+}
+
+interface RecordedWindowState {
+  width: number
+  height: number
+  x: number | null
+  y: number | null
+  maximized: boolean
+}
+
+interface MainWindowState {
+  id: number
+  minimized: boolean
+  visible: boolean
+  focused: boolean
+  focusedWindowId: number | null
+  maximized: boolean
+  bounds: { x: number; y: number; width: number; height: number }
+  normalBounds: { x: number; y: number; width: number; height: number }
+}
+
+async function expectMenuFitsViewport(page: Page): Promise<void> {
+  const metrics = await page.evaluate(() => {
+    const items = [...document.querySelectorAll('.menu-item')]
+      .filter((item) => getComputedStyle(item).display !== 'none')
+    const last = items.at(-1)
+    if (!last) throw new Error('menu has no visible items')
+    const rect = last.getBoundingClientRect()
+    const body = getComputedStyle(document.body)
+    return {
+      bottom: rect.bottom,
+      viewport: window.innerHeight,
+      bottomInset: parseFloat(body.paddingBottom) + parseFloat(body.borderBottomWidth),
+    }
+  })
+  // 最后一项完整可见，且底部只留 body 的内边距/边框，没有被裁切或多余空白。
+  expect(metrics.bottom).toBeLessThanOrEqual(metrics.viewport)
+  expect(metrics.viewport - metrics.bottom).toBeCloseTo(metrics.bottomInset, 0)
+}
+
+const STARTUP_RUN_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
+
+function startupEntryExists(): boolean {
+  try {
+    execFileSync('reg', ['query', STARTUP_RUN_KEY, '/v', STARTUP_ENTRY_NAME], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+}
+
+function startupRegistryValue(): string {
+  return execFileSync('reg', ['query', STARTUP_RUN_KEY, '/v', STARTUP_ENTRY_NAME], { encoding: 'latin1' })
+}
+
+async function writeConfig(
+  userData: string,
+  serverUrl: string,
+  windowState: RecordedWindowState,
+): Promise<void> {
+  await mkdir(userData, { recursive: true })
+  await writeFile(path.join(userData, 'config.json'), JSON.stringify({
+    version: 1,
+    serverUrl,
+    window: windowState,
+  }))
+}
+
+async function mainWindowState(
+  application: ElectronApplication,
+  documentName: string,
+): Promise<MainWindowState | null> {
+  return application.evaluate(({ BrowserWindow }, name) => {
+    const window = BrowserWindow.getAllWindows().find((candidate) => {
+      try {
+        return new URL(candidate.webContents.getURL()).pathname.endsWith(`/${name}`)
+      } catch {
+        return false
+      }
+    })
+    if (!window) return null
+    const bounds = window.getBounds()
+    const normalBounds = window.getNormalBounds()
+    return {
+      id: window.id,
+      minimized: window.isMinimized(),
+      visible: window.isVisible(),
+      focused: window.isFocused(),
+      focusedWindowId: BrowserWindow.getFocusedWindow()?.id ?? null,
+      maximized: window.isMaximized(),
+      bounds: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
+      normalBounds: {
+        x: normalBounds.x,
+        y: normalBounds.y,
+        width: normalBounds.width,
+        height: normalBounds.height,
+      },
+    }
+  }, documentName)
+}
+
+async function restoreMainWindow(application: ElectronApplication, documentName: string): Promise<void> {
+  await application.evaluate(({ BrowserWindow }, name) => {
+    const window = BrowserWindow.getAllWindows().find((candidate) => {
+      try {
+        return new URL(candidate.webContents.getURL()).pathname.endsWith(`/${name}`)
+      } catch {
+        return false
+      }
+    })
+    if (!window) throw new Error(`window ${name} was not found`)
+    window.restore()
+  }, documentName)
 }
 
 async function localWindow(application: ElectronApplication, documentName: string): Promise<Page> {

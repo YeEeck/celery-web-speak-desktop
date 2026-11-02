@@ -9,10 +9,12 @@ import {
 import { Logger } from './logger.js'
 import { disableApplicationMenu, registerApplicationMenuIpc, showApplicationMenu } from './menu.js'
 import { validateServer } from './server-validator.js'
-import { createRemoteWindow, createSetupWindow } from './windows.js'
+import { createRemoteWindow, createSetupWindow, type WindowPresentation } from './windows.js'
+import { isAutostartLaunch, relaunchArguments } from './startup-args.js'
 import { ApplicationAudioCoordinator } from './application-audio.js'
 import { VoiceOverlayCoordinator } from './voice-overlay.js'
 import { UpdateChecker } from './update-checker.js'
+import { createStartupEntry, reconcileStartupEntry, type StartupEntryManager } from './startup-entry.js'
 import { SETUP_CHANNELS, type SetupSaveRequest, type SetupState } from '../shared/setup-api.js'
 import { WINDOW_CHANNELS, type WindowMenuPosition } from '../shared/window-api.js'
 import { UPDATE_CHANNELS } from '../shared/update-api.js'
@@ -25,6 +27,9 @@ app.commandLine.appendSwitch('ignore-certificate-errors')
 if (!app.isPackaged && process.env.CWS_E2E_FAKE_MEDIA === '1') {
   app.commandLine.appendSwitch('use-fake-device-for-media-stream')
 }
+
+// 启动条目拉起时以 --autostart 标记；必须在 app ready 前解析，窗口创建时才有呈现方式可依。
+const startupPresentation: WindowPresentation = isAutostartLaunch(process.argv) ? 'autostart' : 'normal'
 
 const startupUserDataPath = app.getPath('userData')
 const startupServerUrl = readStartupServerUrl(startupUserDataPath)
@@ -48,6 +53,7 @@ let logger: Logger
 let applicationAudio: ApplicationAudioCoordinator | null = null
 let voiceOverlay: VoiceOverlayCoordinator | null = null
 let updateChecker: UpdateChecker | null = null
+let startupEntry: StartupEntryManager | null = null
 
 app.on('certificate-error', (event, _webContents, _url, _error, _certificate, callback) => {
   event.preventDefault()
@@ -79,6 +85,7 @@ async function initialize(): Promise<void> {
   applicationAudio = new ApplicationAudioCoordinator(logger)
   voiceOverlay = new VoiceOverlayCoordinator(logger)
   updateChecker = new UpdateChecker(store, logger, broadcastUpdateState)
+  startupEntry = createStartupEntry(logger)
   logger.info('application_started', { version: app.getVersion() })
   registerSetupIpc()
   registerWindowIpc()
@@ -90,12 +97,19 @@ async function initialize(): Promise<void> {
     },
     checkUpdate: () => void manualCheckUpdate(),
     toggleAutoCheck: () => void toggleAutoCheckUpdate(),
+    toggleAutostart: async () => {
+      if (!startupEntry) return
+      await startupEntry.setEnabled(!(await startupEntry.isEnabled()))
+    },
   })
   disableApplicationMenu()
 
+  // 初始化完成、窗口创建前核对一次：条目跟随当前可执行文件，其余情况不写
+  await reconcileStartupEntry(startupEntry, logger)
+
   const config = await store.load()
-  if (config) showRemote(config)
-  else showSetup(false)
+  if (config) showRemote(config, startupPresentation)
+  else showSetup(false, '', startupPresentation)
 
   scheduleStartupUpdateCheck()
 }
@@ -131,7 +145,12 @@ function registerWindowIpc(): void {
     const window = assertWindowSender(event.sender)
     const position = normalizeMenuPosition(input, window)
     const config = await store.load()
-    showApplicationMenu(window, position, !setupMode, config?.autoCheckUpdate ?? true)
+    showApplicationMenu(window, position, {
+      remoteMode: !setupMode,
+      autoCheckUpdate: config?.autoCheckUpdate ?? true,
+      startupEntryVisible: startupEntry !== null,
+      startupEntryEnabled: startupEntry ? await startupEntry.isEnabled() : false,
+    })
   })
 }
 
@@ -195,7 +214,11 @@ function registerSetupIpc(): void {
   })
 }
 
-function showSetup(canCancel: boolean, startupError = ''): void {
+function showSetup(
+  canCancel: boolean,
+  startupError = '',
+  presentation: WindowPresentation = 'normal',
+): void {
   setupMode = true
   setupCanCancel = canCancel
   setupStartupError = startupError
@@ -204,12 +227,15 @@ function showSetup(canCancel: boolean, startupError = ''): void {
   applicationAudio?.unbindRemote()
   voiceOverlay?.unbindRemote()
   currentRemoteContents = null
-  currentWindow = createSetupWindow()
+  currentWindow = createSetupWindow(presentation)
   attachWindowChrome(currentWindow)
   previous?.destroy()
 }
 
-function showRemote(config: NonNullable<Awaited<ReturnType<ConfigStore['load']>>>): void {
+function showRemote(
+  config: NonNullable<Awaited<ReturnType<ConfigStore['load']>>>,
+  presentation: WindowPresentation = 'normal',
+): void {
   setupMode = false
   currentServerUrl = config.serverUrl
   const previous = currentWindow
@@ -219,9 +245,9 @@ function showRemote(config: NonNullable<Awaited<ReturnType<ConfigStore['load']>>
     },
     onRemoteLoadFailed: (message) => {
       logger.warn('remote_load_failed', { origin: config.serverUrl, message })
-      if (!setupMode) showSetup(false, message)
+      if (!setupMode) showSetup(false, message, presentation)
     },
-  })
+  }, presentation)
   currentWindow = remote.window
   currentRemoteContents = remote.webContents
   applicationAudio?.bindRemote(remote.window, remote.webContents, config.serverUrl)
@@ -267,7 +293,7 @@ function normalizeMenuPosition(input: unknown, window: BrowserWindow): WindowMen
 }
 
 function relaunchApplication(): void {
-  app.relaunch()
+  app.relaunch({ args: relaunchArguments(process.argv) })
   app.exit(0)
 }
 

@@ -85,6 +85,10 @@ body:not(.remote-mode) .remote-only {
   display: none;
 }
 
+body:not(.autostart-mode) .autostart-only {
+  display: none;
+}
+
 .menu-check {
   display: none;
   width: 14px;
