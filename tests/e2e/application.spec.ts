@@ -12,6 +12,7 @@ import {
   type Page,
 } from '@playwright/test'
 import { STARTUP_ENTRY_NAME } from '../../src/shared/startup-entry-api.js'
+import { readStartupEntry } from '../../src/main/startup-entry-registry.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -483,22 +484,19 @@ test('随系统启动：真实 Windows 启动条目写入、读取与删除（�
       return app.getPath('exe')
     }, STARTUP_ENTRY_NAME)
 
-    const written = await application.evaluate(({ app }, name) => (
-      app.getLoginItemSettings().launchItems.find((item) => item.name === name && item.scope === 'user') ?? null
-    ), STARTUP_ENTRY_NAME)
-    expect(written?.path).toBe(executable)
-    expect(written?.enabled).toBe(true)
-    // Chromium 把 --autostart 当开关解析，launchItems.args 不回传它；直接查注册表验证真实命令行。
+    // 读取走生产代码的注册表读取路径（不再用 Electron 的 launchItems）。
+    await expect(readStartupEntry(STARTUP_ENTRY_NAME)).resolves.toEqual({
+      path: executable,
+      args: ['--autostart'],
+      enabled: true,
+    })
     expect(startupRegistryValue()).toContain('--autostart')
 
     await application.evaluate(({ app }, name) => {
       app.setLoginItemSettings({ openAtLogin: false, name })
     }, STARTUP_ENTRY_NAME)
 
-    const removed = await application.evaluate(({ app }, name) => (
-      app.getLoginItemSettings().launchItems.find((item) => item.name === name && item.scope === 'user') ?? null
-    ), STARTUP_ENTRY_NAME)
-    expect(removed).toBeNull()
+    await expect(readStartupEntry(STARTUP_ENTRY_NAME)).resolves.toBeNull()
     expect(startupEntryExists()).toBe(false)
   } finally {
     await application.evaluate(({ app }, name) => {

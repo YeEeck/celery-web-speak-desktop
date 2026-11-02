@@ -2,12 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   STARTUP_ENTRY_ARGS,
   StartupEntryManager,
-  createElectronStartupEntryBackend,
+  createWindowsStartupEntryBackend,
   isStartupEntrySupported,
   reconcileStartupEntry,
   type StartupEntry,
   type StartupEntryBackend,
 } from './startup-entry.js'
+import type { RegistryStartupEntry } from './startup-entry-registry.js'
 import { STARTUP_ENTRY_NAME } from '../shared/startup-entry-api.js'
 
 const EXECUTABLE = 'C:\\Program Files\\Celery Web Speak\\Celery Web Speak.exe'
@@ -18,9 +19,11 @@ class FakeBackend implements StartupEntryBackend {
   removals = 0
   writeError: Error | null = null
   removeError: Error | null = null
+  readError: Error | null = null
   ignoreWrites = false
 
-  read(): StartupEntry {
+  async read(): Promise<StartupEntry> {
+    if (this.readError) throw this.readError
     return { ...this.entry, args: [...this.entry.args] }
   }
 
@@ -48,31 +51,31 @@ function createManager(backend: FakeBackend) {
 }
 
 describe('StartupEntryManager', () => {
-  it('reports disabled and registers the current executable when the entry does not exist', () => {
+  it('reports disabled and registers the current executable when the entry does not exist', async () => {
     const backend = new FakeBackend()
     const { startup, logger } = createManager(backend)
 
-    expect(startup.isEnabled()).toBe(false)
+    await expect(startup.isEnabled()).resolves.toBe(false)
     expect(backend.writes).toEqual([])
     expect(backend.removals).toBe(0)
 
-    expect(startup.setEnabled(true)).toBe(true)
+    await expect(startup.setEnabled(true)).resolves.toBe(true)
     expect(backend.writes).toEqual([{ path: EXECUTABLE, args: ['--autostart'] }])
     expect(backend.entry).toEqual({ enabled: true, path: EXECUTABLE, args: ['--autostart'] })
     expect(logger.info).toHaveBeenCalledWith('startup_entry_enabled', { path: EXECUTABLE })
   })
 
-  it('reports enabled when the system entry is enabled and points at the current executable', () => {
+  it('reports enabled when the system entry is enabled and points at the current executable', async () => {
     const backend = new FakeBackend()
     backend.entry = { enabled: true, path: EXECUTABLE, args: ['--autostart'] }
     const { startup } = createManager(backend)
 
-    expect(startup.isEnabled()).toBe(true)
+    await expect(startup.isEnabled()).resolves.toBe(true)
     expect(backend.writes).toEqual([])
     expect(backend.removals).toBe(0)
   })
 
-  it('compares executable paths with Windows semantics and case-insensitively', () => {
+  it('compares executable paths with Windows semantics and case-insensitively', async () => {
     const backend = new FakeBackend()
     backend.entry = {
       enabled: true,
@@ -81,20 +84,20 @@ describe('StartupEntryManager', () => {
     }
     const { startup } = createManager(backend)
 
-    expect(startup.isEnabled()).toBe(true)
+    await expect(startup.isEnabled()).resolves.toBe(true)
   })
 
-  it('reports disabled when the entry exists but was disabled outside the application', () => {
+  it('reports disabled when the entry exists but was disabled outside the application', async () => {
     const backend = new FakeBackend()
     backend.entry = { enabled: false, path: EXECUTABLE, args: ['--autostart'] }
     const { startup } = createManager(backend)
 
-    expect(startup.isEnabled()).toBe(false)
-    expect(startup.setEnabled(true)).toBe(true)
+    await expect(startup.isEnabled()).resolves.toBe(false)
+    await expect(startup.setEnabled(true)).resolves.toBe(true)
     expect(backend.writes).toEqual([{ path: EXECUTABLE, args: ['--autostart'] }])
   })
 
-  it('reports disabled when the entry path drifted and repairs it without touching the arguments', () => {
+  it('reports disabled when the entry path drifted and repairs it without touching the arguments', async () => {
     const backend = new FakeBackend()
     backend.entry = {
       enabled: true,
@@ -103,9 +106,9 @@ describe('StartupEntryManager', () => {
     }
     const { startup, logger } = createManager(backend)
 
-    expect(startup.isEnabled()).toBe(false)
+    await expect(startup.isEnabled()).resolves.toBe(false)
 
-    startup.reconcilePath()
+    await startup.reconcilePath()
     expect(backend.writes).toEqual([{ path: EXECUTABLE, args: ['--autostart', '--portable'] }])
     expect(backend.entry).toEqual({
       enabled: true,
@@ -118,7 +121,7 @@ describe('StartupEntryManager', () => {
     })
   })
 
-  it('does not write during path reconciliation unless the entry is enabled and drifted', () => {
+  it('does not write during path reconciliation unless the entry is enabled and drifted', async () => {
     const cases: StartupEntry[] = [
       { enabled: false, path: null, args: [] },
       { enabled: false, path: EXECUTABLE, args: ['--autostart'] },
@@ -129,72 +132,18 @@ describe('StartupEntryManager', () => {
       backend.entry = entry
       const { startup } = createManager(backend)
 
-      startup.reconcilePath()
+      await startup.reconcilePath()
       expect(backend.writes).toEqual([])
       expect(backend.removals).toBe(0)
     }
   })
 
-  it('does not throw when writing throws and reports the entry as not enabled', () => {
-    const backend = new FakeBackend()
-    backend.writeError = new Error('access denied')
-    const { startup, logger } = createManager(backend)
-
-    expect(startup.setEnabled(true)).toBe(false)
-    expect(backend.writes).toEqual([])
-    expect(logger.info).not.toHaveBeenCalled()
-    expect(logger.warn).toHaveBeenCalledWith('startup_entry_write_failed', {
-      enabled: true,
-      message: 'access denied',
-    })
-  })
-
-  it('trusts the re-read state when a write did not take effect', () => {
-    const backend = new FakeBackend()
-    backend.ignoreWrites = true
-    const { startup, logger } = createManager(backend)
-
-    expect(startup.setEnabled(true)).toBe(false)
-    expect(backend.writes).toEqual([{ path: EXECUTABLE, args: ['--autostart'] }])
-    expect(logger.info).not.toHaveBeenCalled()
-    expect(logger.warn).toHaveBeenCalledWith('startup_entry_write_failed', {
-      enabled: true,
-      effective: false,
-    })
-  })
-
-  it('removes the entry when disabling and reports the re-read state', () => {
-    const backend = new FakeBackend()
-    backend.entry = { enabled: true, path: EXECUTABLE, args: ['--autostart'] }
-    const { startup, logger } = createManager(backend)
-
-    expect(startup.setEnabled(false)).toBe(false)
-    expect(backend.removals).toBe(1)
-    expect(backend.entry).toEqual({ enabled: false, path: null, args: [] })
-    expect(logger.info).toHaveBeenCalledWith('startup_entry_disabled', { path: EXECUTABLE })
-  })
-
-  it('does not claim the entry was disabled when removal fails', () => {
-    const backend = new FakeBackend()
-    backend.entry = { enabled: true, path: EXECUTABLE, args: ['--autostart'] }
-    backend.removeError = new Error('registry denied')
-    const { startup, logger } = createManager(backend)
-
-    expect(startup.setEnabled(false)).toBe(true)
-    expect(logger.info).not.toHaveBeenCalled()
-    expect(logger.warn).toHaveBeenCalledWith('startup_entry_write_failed', {
-      enabled: false,
-      message: 'registry denied',
-    })
-  })
-
-  it('keeps the startup argument when the operating system reports no arguments', () => {
-    // Electron 的 launchItems 不回传开关型参数，生产环境读回 --autostart 为空。
+  it('keeps the startup argument when a legacy entry has none', async () => {
     const backend = new FakeBackend()
     backend.entry = { enabled: true, path: 'D:\\Old Location\\Celery Web Speak.exe', args: [] }
     const { startup, logger } = createManager(backend)
 
-    startup.reconcilePath()
+    await startup.reconcilePath()
 
     expect(backend.writes).toEqual([{ path: EXECUTABLE, args: ['--autostart'] }])
     expect(logger.info).toHaveBeenCalledWith('startup_entry_reconciled', {
@@ -203,13 +152,77 @@ describe('StartupEntryManager', () => {
     })
   })
 
-  it('does not throw when path reconciliation fails', () => {
+  it('does not throw when writing throws and reports the entry as not enabled', async () => {
+    const backend = new FakeBackend()
+    backend.writeError = new Error('access denied')
+    const { startup, logger } = createManager(backend)
+
+    await expect(startup.setEnabled(true)).resolves.toBe(false)
+    expect(backend.writes).toEqual([])
+    expect(logger.info).not.toHaveBeenCalled()
+    expect(logger.warn).toHaveBeenCalledWith('startup_entry_write_failed', {
+      enabled: true,
+      message: 'access denied',
+    })
+  })
+
+  it('trusts the re-read state when a write did not take effect', async () => {
+    const backend = new FakeBackend()
+    backend.ignoreWrites = true
+    const { startup, logger } = createManager(backend)
+
+    await expect(startup.setEnabled(true)).resolves.toBe(false)
+    expect(backend.writes).toEqual([{ path: EXECUTABLE, args: ['--autostart'] }])
+    expect(logger.info).not.toHaveBeenCalled()
+    expect(logger.warn).toHaveBeenCalledWith('startup_entry_write_failed', {
+      enabled: true,
+      effective: false,
+    })
+  })
+
+  it('removes the entry when disabling and reports the re-read state', async () => {
+    const backend = new FakeBackend()
+    backend.entry = { enabled: true, path: EXECUTABLE, args: ['--autostart'] }
+    const { startup, logger } = createManager(backend)
+
+    await expect(startup.setEnabled(false)).resolves.toBe(false)
+    expect(backend.removals).toBe(1)
+    expect(backend.entry).toEqual({ enabled: false, path: null, args: [] })
+    expect(logger.info).toHaveBeenCalledWith('startup_entry_disabled', { path: EXECUTABLE })
+  })
+
+  it('does not claim the entry was disabled when removal fails', async () => {
+    const backend = new FakeBackend()
+    backend.entry = { enabled: true, path: EXECUTABLE, args: ['--autostart'] }
+    backend.removeError = new Error('registry denied')
+    const { startup, logger } = createManager(backend)
+
+    await expect(startup.setEnabled(false)).resolves.toBe(true)
+    expect(logger.info).not.toHaveBeenCalled()
+    expect(logger.warn).toHaveBeenCalledWith('startup_entry_write_failed', {
+      enabled: false,
+      message: 'registry denied',
+    })
+  })
+
+  it('reports disabled and logs when reading the operating system state fails', async () => {
+    const backend = new FakeBackend()
+    backend.readError = new Error('reg.exe missing')
+    const { startup, logger } = createManager(backend)
+
+    await expect(startup.isEnabled()).resolves.toBe(false)
+    expect(logger.warn).toHaveBeenCalledWith('startup_entry_read_failed', {
+      message: 'reg.exe missing',
+    })
+  })
+
+  it('does not throw when path reconciliation fails', async () => {
     const backend = new FakeBackend()
     backend.entry = { enabled: true, path: 'D:\\Old\\Celery.exe', args: ['--autostart'] }
     backend.writeError = new Error('denied')
     const { startup, logger } = createManager(backend)
 
-    expect(() => startup.reconcilePath()).not.toThrow()
+    await expect(startup.reconcilePath()).resolves.toBeUndefined()
     expect(backend.writes).toEqual([])
     expect(logger.warn).toHaveBeenCalledWith('startup_entry_write_failed', {
       operation: 'reconcile',
@@ -219,7 +232,7 @@ describe('StartupEntryManager', () => {
 })
 
 describe('reconcileStartupEntry', () => {
-  it('repairs a drifted entry at startup, keeps its arguments and logs the self-heal', () => {
+  it('repairs a drifted entry at startup, keeps its arguments and logs the self-heal', async () => {
     const backend = new FakeBackend()
     backend.entry = {
       enabled: true,
@@ -228,7 +241,7 @@ describe('reconcileStartupEntry', () => {
     }
     const { startup, logger } = createManager(backend)
 
-    reconcileStartupEntry(startup, logger)
+    await reconcileStartupEntry(startup, logger)
 
     expect(backend.writes).toEqual([{ path: EXECUTABLE, args: ['--autostart', '--portable'] }])
     expect(backend.removals).toBe(0)
@@ -239,22 +252,22 @@ describe('reconcileStartupEntry', () => {
     expect(logger.warn).not.toHaveBeenCalled()
   })
 
-  it('does nothing at startup when the entry manager is unavailable', () => {
+  it('does nothing at startup when the entry manager is unavailable', async () => {
     const logger = { warn: vi.fn() }
 
-    expect(() => reconcileStartupEntry(null, logger)).not.toThrow()
+    await expect(reconcileStartupEntry(null, logger)).resolves.toBeUndefined()
     expect(logger.warn).not.toHaveBeenCalled()
   })
 
-  it('keeps startup running and logs when reconciliation throws unexpectedly', () => {
+  it('keeps startup running and logs when reconciliation throws unexpectedly', async () => {
     const logger = { warn: vi.fn() }
     const startup = {
-      reconcilePath(): void {
+      async reconcilePath(): Promise<void> {
         throw new Error('registry unavailable')
       },
     }
 
-    expect(() => reconcileStartupEntry(startup, logger)).not.toThrow()
+    await expect(reconcileStartupEntry(startup, logger)).resolves.toBeUndefined()
     expect(logger.warn).toHaveBeenCalledWith('startup_entry_write_failed', {
       operation: 'reconcile',
       message: 'registry unavailable',
@@ -262,71 +275,42 @@ describe('reconcileStartupEntry', () => {
   })
 })
 
-describe('createElectronStartupEntryBackend', () => {
+describe('createWindowsStartupEntryBackend', () => {
   it('uses the fixed entry name and startup argument', () => {
     expect(STARTUP_ENTRY_NAME).toBe('Celery Web Speak')
     expect(STARTUP_ENTRY_ARGS).toEqual(['--autostart'])
   })
 
-  it('reads the fixed-named entry and exposes its operating-system state', () => {
-    const backend = createElectronStartupEntryBackend({
-      getLoginItemSettings: () => ({
-        launchItems: [
-          { name: 'Another Application', path: 'D:\\Other.exe', args: [], scope: 'user', enabled: true },
-          {
-            name: STARTUP_ENTRY_NAME,
-            path: EXECUTABLE,
-            args: ['--autostart'],
-            scope: 'user',
-            enabled: false,
-          },
-        ],
-      }),
-      setLoginItemSettings: () => undefined,
-    })
+  it('maps the registry entry read for the fixed name', async () => {
+    const names: string[] = []
+    const backend = createWindowsStartupEntryBackend(
+      { setLoginItemSettings: () => undefined },
+      async (name) => {
+        names.push(name)
+        return { path: EXECUTABLE, args: ['--autostart'], enabled: false }
+      },
+    )
 
-    expect(backend.read()).toEqual({ enabled: false, path: EXECUTABLE, args: ['--autostart'] })
+    await expect(backend.read()).resolves.toEqual({
+      enabled: false,
+      path: EXECUTABLE,
+      args: ['--autostart'],
+    })
+    expect(names).toEqual([STARTUP_ENTRY_NAME])
   })
 
-  it('ignores a machine-scope entry that happens to use the same name', () => {
-    const backend = createElectronStartupEntryBackend({
-      getLoginItemSettings: () => ({
-        launchItems: [
-          {
-            name: STARTUP_ENTRY_NAME,
-            path: 'C:\\Machine Install\\Celery Web Speak.exe',
-            args: ['--autostart'],
-            scope: 'machine',
-            enabled: true,
-          },
-          {
-            name: STARTUP_ENTRY_NAME,
-            path: EXECUTABLE,
-            args: ['--autostart'],
-            scope: 'user',
-            enabled: true,
-          },
-        ],
-      }),
-      setLoginItemSettings: () => undefined,
-    })
+  it('reports an absent registry entry as disabled', async () => {
+    const backend = createWindowsStartupEntryBackend(
+      { setLoginItemSettings: () => undefined },
+      async (): Promise<RegistryStartupEntry | null> => null,
+    )
 
-    expect(backend.read()).toEqual({ enabled: true, path: EXECUTABLE, args: ['--autostart'] })
-  })
-
-  it('returns an absent entry as disabled', () => {
-    const backend = createElectronStartupEntryBackend({
-      getLoginItemSettings: () => ({ launchItems: [] }),
-      setLoginItemSettings: () => undefined,
-    })
-
-    expect(backend.read()).toEqual({ enabled: false, path: null, args: [] })
+    await expect(backend.read()).resolves.toEqual({ enabled: false, path: null, args: [] })
   })
 
   it('writes and removes the entry under the fixed registry name', () => {
     const settings: unknown[] = []
-    const backend = createElectronStartupEntryBackend({
-      getLoginItemSettings: () => ({ launchItems: [] }),
+    const backend = createWindowsStartupEntryBackend({
       setLoginItemSettings: (value) => settings.push(value),
     })
 
