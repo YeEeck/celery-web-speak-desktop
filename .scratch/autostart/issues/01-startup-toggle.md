@@ -21,10 +21,11 @@
 
 已实现并提交到 `feat/autostart`。
 
-- `src/main/startup-entry.ts`：`StartupEntryManager` 对外只有 `isEnabled` / `setEnabled` / `reconcilePath` 三个能力；`StartupEntryBackend` 可注入。生产后端按固定条目名 `Celery Web Speak` 读取 `launchItems`，写入 `--autostart` 与 `enabled: true`，删除按同一名字；启用判定为"条目存在 && 系统 enabled && 路径与当前可执行文件一致"，路径使用 Windows 语义规范化并忽略大小写。平台与打包门控（`packaged && win32`）收在 `createStartupEntry` 内，不支持时返回 `null`，调用方无需判断平台。写入后重读并以重读结果为准；失败只写日志（`startup_entry_enabled` / `startup_entry_disabled` / `startup_entry_write_failed` / `startup_entry_reconciled`），不抛错、不弹框。
+- `src/main/startup-entry.ts`：`StartupEntryManager` 对外只有 `isEnabled` / `setEnabled` / `reconcilePath` 三个能力；`StartupEntryBackend` 可注入。写入 `--autostart` 与 `enabled: true`、删除按固定名字都走 Electron 登录项 API；读取走 `src/main/startup-entry-registry.ts` 直接读注册表（`Run` 值 + `StartupApproved`），因为 `launchItems` 只按路径过滤且路径含空格时读不到条目（ADR-0005）。启用判定为"条目存在 && 系统 enabled && 路径与当前可执行文件一致"，路径使用 Windows 语义规范化并忽略大小写。平台与打包门控（`packaged && win32`）收在 `createStartupEntry` 内，不支持时返回 `null`，调用方无需判断平台。读取接口为异步；写入后重读并以重读结果为准；失败只写日志（`startup_entry_enabled` / `startup_entry_disabled` / `startup_entry_write_failed` / `startup_entry_reconciled`），不抛错、不弹框。
 - `src/main/startup-entry.test.ts`：伪后端覆盖不存在、启用、外部禁用、路径漂移、写入抛错五种状态，并覆盖写后重读未生效、删除失败不伪造成功、路径核对不做无谓写入、固定条目名与启动参数。`reconcilePath` 本票只实现能力与单测，未接入启动流程（留给 03 票）。
 - 菜单：`src/shared/menu-api.ts` 新增 `toggle-autostart` 动作，`MenuState` 改为按动作索引的 `checks`；「随系统启动」紧邻「自动检查更新」，远程与配置模式均显示；每次打开菜单时由 `WINDOW_CHANNELS.showMenu` 重读系统状态传入，切换后关闭菜单、下次打开即新状态。未打包/非 Windows 下菜单不渲染该项，菜单层与主进程双层拒绝伪造动作。
 - 高度：`applicationMenuHeight` 按可见项目数计算（远程 245 / 加入开关 279；配置 168 / 加入开关 202），`src/main/menu.test.ts` 覆盖。
-- 校验：`npm run typecheck && npm test` 通过（140 个单测）；本机 e2e 3 passed（未打包时该项不可见，仅验证既有菜单不回归）。
+- 校验：`npm run typecheck && npm test` 通过（170 个单测）；本机 e2e 7 passed + 1 skipped（未打包时该项不可见；Windows 本地真实条目用例在检测到既有条目时按设计跳过）。
+- 打包态验证：在 `release\win-unpacked` 中打开菜单，条目存在时显示勾选；点击后注册表值删除、菜单变为未勾选；再次点击后值恢复并指向当前 exe；把值改成旧位置后启动应用，值被自愈改写为当前 exe。
 
-已知覆盖缺口：真实链路"勾选 → 注册表 → 任务管理器可见"仍只能在打包后的 Windows 本机手工验证，CI 不覆盖。
+已知覆盖缺口："任务管理器可见"仍只能本机手工确认；CI 不覆盖。

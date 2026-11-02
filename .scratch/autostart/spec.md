@@ -87,7 +87,9 @@
 
 已知覆盖缺口，需要如实记录：CI 只在 Linux runner 上跑 e2e，Windows runner 只跑类型检查与单测，因此"勾选 → 注册表 → 任务管理器可见"这条真实链路没有自动化覆盖。补一个 `test.skip(process.platform !== 'win32')` 的端到端用例供 Windows 本地运行，并在测试决策里写明它在 CI 中恒被跳过，而不是伪装成已覆盖。
 
-已落实：`tests/e2e/application.spec.ts` 的"真实 Windows 启动条目写入、读取与删除"用例在 Windows 本地通过 `getLoginItemSettings().launchItems` 与注册表查询验证写入/读取/删除链路，其余平台与 CI 中恒被跳过。该用例还确认了一个实现约束：Chromium 把 `--autostart` 当作开关，`launchItems[].args` 不回传它，因此路径自愈写入时由应用补回固定启动参数。
+已落实：`tests/e2e/application.spec.ts` 的"真实 Windows 启动条目写入、读取与删除"用例在 Windows 本地验证"Electron 写入 → 注册表 → 生产读取"链路，其余平台与 CI 中恒被跳过；`src/main/startup-entry-registry.test.ts` 另在 Windows 上覆盖含空格路径、中文路径与 StartupApproved 禁用态。
+
+实测还修正了一条实现决策：Electron 的 `launchItems` 只按传入路径过滤，且在可执行文件路径含空格时读不到自己写入的条目（本应用安装路径必然含空格），既无法回显勾选，也无法发现漂移条目。因此写入/删除继续走 Electron 登录项 API，读取改为直接读注册表（Run 值 + StartupApproved），见 ADR-0005。
 
 ## Out of Scope
 

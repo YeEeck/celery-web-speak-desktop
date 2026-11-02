@@ -239,13 +239,13 @@ GET {serverOrigin}/api/health
 
 Windows 正式包在“更多”菜单提供“随系统启动”勾选项，紧邻“自动检查更新”，远程模式与配置模式都显示；开发模式与非 Windows 平台不显示，主进程同时拒绝该动作。勾选与取消由应用在运行时写入或删除当前用户启动条目（Windows Run 值，条目名 `Celery Web Speak`，参数 `--autostart`）；安装器不创建条目。
 
-- **状态真相**：每次打开菜单都读取启动条目列表（`getLoginItemSettings().launchItems`），按条目名与当前可执行文件路径判定，不使用 `openAtLogin` 或 `executableWillLaunchAtLogin`。用户在任务管理器的“启动”页禁用或删除条目后，菜单显示未勾选，应用不会自动重新启用。
+- **状态真相**：每次打开菜单都直接读注册表（当前用户 `Run` 值与 `StartupApproved\Run` 的启用状态），按条目名与当前可执行文件路径判定；写入与删除走 Electron 登录项 API。不使用 `openAtLogin` 或 `executableWillLaunchAtLogin`，也不用 `launchItems`：它只按传入路径过滤，且路径含空格时读不到自己的条目（见 ADR-0005）。用户在任务管理器的“启动”页禁用或删除条目后，菜单显示未勾选，应用不会自动重新启用。
 - **登录拉起**：`--autostart` 由主进程在 app ready 前解析。窗口按“恢复记录尺寸（含最大化）→ 显示 → 最小化”呈现，不抢焦点、不弹提示；服务器不可达时切出的配置页同样最小化。
 - **路径自愈**：应用初始化完成后、窗口创建前核对一次；仅当条目存在、处于启用状态且记录路径与当前可执行文件不一致时才改写，参数保留，其余情况不写。
 - **卸载清理**：Inno 安装器按与运行时相同的值名删除当前用户的启动值，条目不存在时静默跳过。
 - **边界**：不新增 `config.json` 字段，不升级配置版本，不新增跨进程协议。
 
-设计背景见 [随系统启动 spec](../.scratch/autostart/spec.md)，决策记录见 [ADR-0004](adr/0004-startup-entry-owned-by-application.md)。
+设计背景见 [随系统启动 spec](../.scratch/autostart/spec.md)，决策记录见 [ADR-0004](adr/0004-startup-entry-owned-by-application.md) 与 [ADR-0005](adr/0005-startup-entry-state-read-from-registry.md)。
 
 ## Session 与权限
 
