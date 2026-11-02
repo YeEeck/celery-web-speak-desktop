@@ -97,15 +97,15 @@ async function initialize(): Promise<void> {
     },
     checkUpdate: () => void manualCheckUpdate(),
     toggleAutoCheck: () => void toggleAutoCheckUpdate(),
-    toggleAutostart: () => {
+    toggleAutostart: async () => {
       if (!startupEntry) return
-      startupEntry.setEnabled(!startupEntry.isEnabled())
+      await startupEntry.setEnabled(!(await startupEntry.isEnabled()))
     },
   })
   disableApplicationMenu()
 
   // 初始化完成、窗口创建前核对一次：条目跟随当前可执行文件，其余情况不写
-  reconcileStartupEntry(startupEntry, logger)
+  await reconcileStartupEntry(startupEntry, logger)
 
   const config = await store.load()
   if (config) showRemote(config, startupPresentation)
@@ -149,7 +149,7 @@ function registerWindowIpc(): void {
       remoteMode: !setupMode,
       autoCheckUpdate: config?.autoCheckUpdate ?? true,
       startupEntryVisible: startupEntry !== null,
-      startupEntryEnabled: startupEntry?.isEnabled() ?? false,
+      startupEntryEnabled: startupEntry ? await startupEntry.isEnabled() : false,
     })
   })
 }

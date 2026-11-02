@@ -2,6 +2,7 @@ import path from 'node:path'
 import { app } from 'electron'
 import type { Logger } from './logger.js'
 import { AUTOSTART_FLAG } from './startup-args.js'
+import { readStartupEntry, type RegistryStartupEntry } from './startup-entry-registry.js'
 import { STARTUP_ENTRY_NAME } from '../shared/startup-entry-api.js'
 
 export const STARTUP_ENTRY_ARGS: readonly string[] = [AUTOSTART_FLAG]
@@ -13,7 +14,7 @@ export interface StartupEntry {
 }
 
 export interface StartupEntryBackend {
-  read(): StartupEntry
+  read(): Promise<StartupEntry>
   write(path: string, args: string[]): void
   remove(): void
 }
@@ -43,16 +44,19 @@ export class StartupEntryManager {
    * 条目存在、系统启用且记录的可执行文件就是当前程序，才算启用。
    * 路径漂移的条目不算启用，交由路径核对能力修复。
    */
-  isEnabled(): boolean {
-    const entry = this.readEntry()
-    return entry !== null && entry.enabled && entry.path !== null && sameWindowsPath(entry.path, this.currentExecutable)
+  async isEnabled(): Promise<boolean> {
+    const entry = await this.readEntry()
+    return entry !== null
+      && entry.enabled
+      && entry.path !== null
+      && sameWindowsPath(entry.path, this.currentExecutable)
   }
 
   /**
    * 写入没有错误通道：写后重新读取，并以操作系统报告的最终状态为准。
    * 失败只记录日志，不向调用方抛错，也不伪造成功。
    */
-  setEnabled(enabled: boolean): boolean {
+  async setEnabled(enabled: boolean): Promise<boolean> {
     let writeError: unknown = null
     try {
       if (enabled) this.backend.write(this.currentExecutable, [...STARTUP_ENTRY_ARGS])
@@ -61,7 +65,7 @@ export class StartupEntryManager {
       writeError = error
     }
 
-    const effective = this.isEnabled()
+    const effective = await this.isEnabled()
     if (writeError !== null) {
       this.logger.warn('startup_entry_write_failed', {
         enabled,
@@ -81,8 +85,8 @@ export class StartupEntryManager {
    * 仅当条目存在且启用、记录路径与当前可执行文件不一致时改写路径，参数保持不变。
    * 失败只记录日志，不抛错。
    */
-  reconcilePath(): void {
-    const entry = this.readEntry()
+  async reconcilePath(): Promise<void> {
+    const entry = await this.readEntry()
     if (entry === null || !entry.enabled || entry.path === null) return
     if (sameWindowsPath(entry.path, this.currentExecutable)) return
 
@@ -96,16 +100,16 @@ export class StartupEntryManager {
       return
     }
 
-    if (this.isEnabled()) {
+    if (await this.isEnabled()) {
       this.logger.info('startup_entry_reconciled', { from: entry.path, to: this.currentExecutable })
     } else {
       this.logger.warn('startup_entry_write_failed', { operation: 'reconcile' })
     }
   }
 
-  private readEntry(): StartupEntry | null {
+  private async readEntry(): Promise<StartupEntry | null> {
     try {
-      return this.backend.read()
+      return await this.backend.read()
     } catch (error) {
       this.logger.warn('startup_entry_read_failed', { message: errorMessage(error) })
       return null
@@ -113,16 +117,7 @@ export class StartupEntryManager {
   }
 }
 
-interface StartupLoginItem {
-  name: string
-  path: string
-  args: string[]
-  scope: 'user' | 'machine'
-  enabled: boolean
-}
-
 export interface LoginItemSettingsApi {
-  getLoginItemSettings(): { launchItems: readonly StartupLoginItem[] }
   setLoginItemSettings(settings: {
     openAtLogin?: boolean
     name?: string
@@ -133,20 +128,19 @@ export interface LoginItemSettingsApi {
 }
 
 /**
- * 生产后端：按固定条目名读取登录项列表，写入时同时恢复 StartupApproved 启用状态。
- * 只看当前用户（HKCU）的条目：机器级（HKLM）同名声明的条目不属于本应用。
- * 注意 launchItems 的 args 不含开关型参数（--autostart 会被 Chromium 当作 switch），
- * 写入方始终用 STARTUP_ENTRY_ARGS，读取方不能把它当成条目参数的完整快照。
+ * 生产后端：写入与删除走 Electron 登录项 API（同时维护 StartupApproved 启用状态），
+ * 读取走注册表。Electron 的 launchItems 只按传入路径过滤，路径含空格时连自己写入的
+ * 条目都读不回来，也无法枚举指向旧位置的条目。
  */
-export function createElectronStartupEntryBackend(api: LoginItemSettingsApi = app): StartupEntryBackend {
+export function createWindowsStartupEntryBackend(
+  api: LoginItemSettingsApi = app,
+  readEntry: (name: string) => Promise<RegistryStartupEntry | null> = readStartupEntry,
+): StartupEntryBackend {
   return {
-    read() {
-      const item = api
-        .getLoginItemSettings()
-        .launchItems
-        .find((candidate) => candidate.name === STARTUP_ENTRY_NAME && candidate.scope === 'user')
-      if (!item) return { enabled: false, path: null, args: [] }
-      return { enabled: item.enabled, path: item.path, args: [...item.args] }
+    async read() {
+      const entry = await readEntry(STARTUP_ENTRY_NAME)
+      if (entry === null) return { enabled: false, path: null, args: [] }
+      return { enabled: entry.enabled, path: entry.path, args: [...entry.args] }
     },
     write(executablePath, args) {
       api.setLoginItemSettings({
@@ -173,7 +167,7 @@ export function isStartupEntrySupported(packaged: boolean, platform: NodeJS.Plat
 export function createStartupEntry(logger: Pick<Logger, 'info' | 'warn'>): StartupEntryManager | null {
   if (!isStartupEntrySupported(app.isPackaged, process.platform)) return null
   return new StartupEntryManager({
-    backend: createElectronStartupEntryBackend(),
+    backend: createWindowsStartupEntryBackend(),
     currentExecutable: app.getPath('exe'),
     logger,
   })
@@ -184,13 +178,13 @@ export function createStartupEntry(logger: Pick<Logger, 'info' | 'warn'>): Start
  * 管理器在开发模式与非 Windows 下为 null，此时不读不写；
  * 核对自身意外抛错也只留一条日志，绝不能让应用启动失败。
  */
-export function reconcileStartupEntry(
+export async function reconcileStartupEntry(
   startupEntry: Pick<StartupEntryManager, 'reconcilePath'> | null,
   logger: Pick<Logger, 'warn'>,
-): void {
+): Promise<void> {
   if (startupEntry === null) return
   try {
-    startupEntry.reconcilePath()
+    await startupEntry.reconcilePath()
   } catch (error) {
     logger.warn('startup_entry_write_failed', {
       operation: 'reconcile',
@@ -200,9 +194,8 @@ export function reconcileStartupEntry(
 }
 
 /**
- * 启动条目由本应用拥有，固定启动参数必须留在条目里。Electron 的 launchItems
- * 不回传开关型参数（Chromium 把 --autostart 当作 switch），读回值可能为空；
- * 改写路径时补回，避免自愈把“登录拉起”的标记丢掉。
+ * 条目由本应用拥有，固定启动参数必须留在条目里。手工改过或旧版本写入的条目
+ * 可能缺少 --autostart；改写路径时补回，避免自愈把“登录拉起”的标记丢掉。
  */
 function withStartupArgs(reported: readonly string[]): string[] {
   const args = [...reported]

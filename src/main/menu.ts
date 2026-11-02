@@ -40,7 +40,7 @@ export interface MenuActions {
   reload(): void
   checkUpdate(): void
   toggleAutoCheck(): void
-  toggleAutostart(): void
+  toggleAutostart(): void | Promise<void>
 }
 
 export interface ApplicationMenuOptions {
@@ -68,7 +68,7 @@ export function registerApplicationMenuIpc(actions: MenuActions): void {
     return { checks: menuChecks }
   })
 
-  ipcMain.handle(MENU_CHANNELS.execute, (event, input: unknown) => {
+  ipcMain.handle(MENU_CHANNELS.execute, async (event, input: unknown) => {
     const menu = assertMenuSender(event.sender)
     const parent = menu.getParentWindow()
     const action = normalizeMenuAction(input)
@@ -78,7 +78,7 @@ export function registerApplicationMenuIpc(actions: MenuActions): void {
     else if (action === 'reload') actions.reload()
     else if (action === 'check-update') actions.checkUpdate()
     else if (action === 'toggle-auto-check') actions.toggleAutoCheck()
-    else if (action === 'toggle-autostart') actions.toggleAutostart()
+    else if (action === 'toggle-autostart') await actions.toggleAutostart()
     else if (action === 'quit') app.quit()
     else if (parent && !parent.isDestroyed()) {
       void dialog.showMessageBox(parent, {
